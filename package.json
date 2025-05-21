@@ -14,7 +14,7 @@
   "scripts": {
     "dev": "node scripts/dev.js",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 4999",
     "lint": "next lint",
     "deploy:vercel": "node scripts/deploy.js",
     "cleanup": "lsof -ti :3000 | xargs kill -9"
