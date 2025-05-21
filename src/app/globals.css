@@ -3,34 +3,149 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #110617;
+  --foreground: #ffffff;
 }
 
 body {
+  font-family: Inter, Helvetica, sans-serif;
+  user-select: none;
+  background-color: var(--background);
   color: var(--foreground);
-  background: var(--background);
-  font-family: 'Inter', Helvetica, Arial, sans-serif;
-}
-
-* {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
-}
-
-*::-webkit-scrollbar {
-  display: none;
+  user-select: none;
 }
 
 @layer base {
   :root {
+    --background: 265 47.449999999999996% 5.44%;
+    --foreground: 265 7.3% 98.4%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --ring: 265 73% 68%;
     --radius: 0.5rem;
+
+    --muted: 265 36.5% 20.400000000000002%;
+    --muted-foreground: 265 7.3% 56.8%;
+
+    --card: 265 50.4% 8.84%;
+    --card-foreground: 265 7.3% 98.4%;
+
+    --border: 261 39% 43%;
+    --input: 265 36.5% 20.400000000000002%;
+
+    --primary: 249 73% 68%; /* Loại bỏ dấu phẩy */
+    --primary-foreground: 265 7.3% 6.8%; /* Sửa luôn cho đồng nhất */
+
+    --secondary: 265 36.5% 20.400000000000002%;
+    --secondary-foreground: 265 7.3% 98.4%;
+
+    --accent: 265 36.5% 20.400000000000002%;
+    --accent-foreground: 265 7.3% 98.4%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 265 7.3% 98.4%;
+    --word-gray: 265 36.5% 20.400000000000002%;
+
+    --accept: 92 61% 56%;
+    --accept-foreground: 265 7.3% 98.4%;
+
+    --warning: 49 100% 63%;
+    --warning-foreground: 265 7.3% 98.4%;
+
+    --cancel: 359 100% 68%;
+    --cancel-foreground: 265 7.3% 98.4%;
+
+    --sky: 169 100% 68%;
+    --sky-foreground: 265 7.3% 98.4%;
+
+    --darkgreen: 92 57% 31%;
+    --darkgreen-foreground: 92 57% 31%;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
+  .dark {
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox */
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.pool-wheel-custom path {
+  stroke-opacity: 50%;
+}
+
+::-webkit-scrollbar {
+  width: 0px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent; /* Glass effect: transparent background */
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #563582; /* Primary color */
+  border-radius: 10px;
+  backdrop-filter: blur(10px); /* Glass effect with blur */
+  -webkit-backdrop-filter: blur(10px); /* Safari support */
+  border: 2px solid rgba(255, 255, 255, 0.1); /* Subtle border for glass effect */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6a439e; /* Slightly lighter shade on hover */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.gradient-text {
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  display: inline-block;
+}
+.text-stroke {
+  -webkit-text-stroke-width: 25px;
+  -webkit-text-stroke-color: transparent;
+  background-image: linear-gradient(to left, #ff5c5f, #8371e9);
+  background-clip: text;
+  -webkit-background-clip: text;
+  padding: 10px;
 }

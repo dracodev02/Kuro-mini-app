@@ -137,3 +137,4 @@ export async function getFarcasterMetadata(): Promise<FrameManifest> {
     },
   };
 }
+

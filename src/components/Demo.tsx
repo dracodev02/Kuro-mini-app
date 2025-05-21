@@ -1,165 +1,309 @@
 "use client";
-
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Input } from "../components/ui/input";
-import { signIn, signOut, getCsrfToken } from "next-auth/react";
-import sdk, {
-  SignIn as SignInCore,
-} from "@farcaster/frame-sdk";
-import {
-  useAccount,
-  useSendTransaction,
-  useSignMessage,
-  useSignTypedData,
-  useWaitForTransactionReceipt,
-  useDisconnect,
-  useConnect,
-  useSwitchChain,
-  useChainId,
-} from "wagmi";
-
-import { config } from "~/components/providers/WagmiProvider";
-import { Button } from "~/components/ui/Button";
-import { truncateAddress } from "~/lib/truncateAddress";
-import { base, degen, mainnet, optimism, unichain } from "wagmi/chains";
-import { BaseError, UserRejectedRequestError } from "viem";
-import { useSession } from "next-auth/react";
-import { Label } from "~/components/ui/label";
 import { useFrame } from "~/components/providers/FrameProvider";
+import { PieChart } from "@mui/x-charts/PieChart";
+import { useEffect, useRef, useState } from "react";
+import {
+  Participant,
+  PoolStatus,
+  TimeEnum,
+  useKuro,
+} from "~/context/KuroContext";
+import { convertWeiToEther, formatEthereumAddress } from "~/utils/string";
+import { toast } from "react-toastify";
+import Image from "next/image";
+import { formatEther } from "ethers";
+import { useAccount } from "wagmi";
 
-export default function Demo(
-  { title }: { title?: string } = { title: "Frames v2 Demo" }
-) {
-  const { isSDKLoaded, context, added, notificationDetails, lastEvent, addFrame, addFrameResult, openUrl, close } = useFrame();
-  const [isContextOpen, setIsContextOpen] = useState(false);
-  const [txHash, setTxHash] = useState<string | null>(null);
-  const [sendNotificationResult, setSendNotificationResult] = useState("");
-  const [copied, setCopied] = useState(false);
+export const colors = [
+  "#4DFFFF", // Blue neon (từ #33CCFF)
+  "#FF4DFF", // Magenta neon (từ #FF00FF)
+  "#4DFF4D", // Green neon (từ #00FF00)
+  "#FF4DB3", // Ruby neon (từ #FF0077)
+  "#FF80FF", // Bright magenta (từ #FF33FF)
+  "#80FFFF", // Aqua neon (từ #33FFCC)
+  "#FF4DE6", // Deep pink (từ #FF0099)
+  "#4DFFE6", // Mint neon (từ #00FF99)
+  "#FF99FF", // Light magenta (từ #FF66FF)
+  "#99FFFF", // Sky cyan (từ #66FFFF)
+  "#FF4DCC", // Vivid pink (từ #FF0088 // Purple neon (từ #CC00FF)
+  "#4DFF99", // Lime neon (từ #00FF66)
+  "#FF80CC", // Rose neon (từ #FF3399 // Candy pink (từ #FF00AA)
+  "#4DFF80", // Acid green (từ #00FF33)
+  "#FFAAFF", // Pastel magenta (từ #FF55FF)
+  "#AAFFFF", // Pale cyan (từ #55FFFF)
+  "#FF4D99", // Pink neon (từ #FF0066 // Violet neon (từ #AA00FF)
+  "#4DFFAA", // Spring green (từ #00FF55) // Ice cyan (từ #22FFFF)
+  "#FF4D80", // Crimson neon (từ #FF0044)
+  "#4DFFD4", // Jade neon (từ #00FF88)
+  "#FFB3FF", // Lilac neon (từ #FF77FF)
+  "#B3FFFF", // Crystal cyan (từ #77FFFF // Hot pink (từ #FF00CC)
+  "#FF4D80", // Scarlet neon (từ #FF0033) // Turquoise neon (từ #00FFBB)
+  "#FFE6FF", // Bubblegum pink (từ #FF99FF)
+  "#E6FFFF", // Frost cyan (từ #99FFFF)
+  "#FF4D66", // Cherry neon (từ #FF0022) // Lagoon neon (từ #00FFDD)
+  "#FFF0FF", // Lavender neon (từ #FFBBFF)
+  "#F0FFFF", // Mist cyan (từ #BBFFFF)
+  "#FF4D4D", // Blood neon (từ #FF0011) // Ocean neon (từ #00FFEE)
+  "#FFF0FF", // Orchid neon (từ #FFDDFF)
+  "#E6FFE6", // Pale mint (từ #CCFFCC)
+  "#FF4D4D", // Pure red neon (từ #FF0000)
+  "#4DFF66", // Forest neon (từ #00FF11)
+  "#FFF0FF", // Blush neon (từ #FFEEFF)
+  "#F0FFF0", // Ghost mint (từ #EEFFEE)
+  "#FF80AA", // Coral neon (từ #FF0055)
+  "#66FF4D", // Toxic green (từ #11FF00) // Blue neon (từ #33CCFF // Magenta neon (từ #FF00FF) // Bright magenta (từ #FF33FF) // Aqua neon (từ #33FFCC)
+  "#FF4D99", // Pink neon (từ #FF0066 // Violet neon (từ #AA00FF)
+  "#4DFFAA", // Spring green (từ #00FF55) // Flamingo pink (từ #FF22AA) // Cyan neon (từ #00FFFF) // Ice cyan (từ #22FFFF)
+  "#FF4D80", // Crimson neon (từ #FF0044)
+  "#4DFFD4", // Jade neon (từ #00FF88)
+  "#FFB3FF", // Lilac neon (từ #FF77FF)
+  "#B3FFFF", // Crystal cyan (từ #77FFFF // Hot pink (từ #FF00CC)
+  "#FF4D80", // Scarlet neon (từ #FF0033) // Turquoise neon (từ #00FFBB)
+  "#FFE6FF", // Bubblegum pink (từ #FF99FF)
+  "#E6FFFF", // Frost cyan (từ #99FFFF)
+  "#FF4D66", // Cherry neon (từ #FF0022) // Lagoon neon (từ #00FFDD)
+  "#FFF0FF", // Lavender neon (từ #FFBBFF)
+  "#F0FFFF", // Mist cyan (từ #BBFFFF)
+  "#FF4D4D", // Blood neon (từ #FF0011) // Ocean neon (từ #00FFEE)
+  "#FFF0FF", // Orchid neon (từ #FFDDFF)
+  "#E6FFE6", // Pale mint (từ #CCFFCC)
+  "#FF4D4D", // Pure red neon (từ #FF0000)
+  "#4DFF66", // Forest neon (từ #00FF11)
+  "#FFF0FF", // Blush neon (từ #FFEEFF)
+  "#F0FFF0", // Ghost mint (từ #EEFFEE)
+  "#FF80AA", // Coral neon (từ #FF0055)
+  "#66FF4D", // Toxic green (từ #11FF00)
+];
 
-  const { address, isConnected } = useAccount();
-  const chainId = useChainId();
-
-  useEffect(() => {
-    console.log("isSDKLoaded", isSDKLoaded);
-    console.log("context", context);
-    console.log("address", address);
-    console.log("isConnected", isConnected);
-    console.log("chainId", chainId);
-  }, [context, address, isConnected, chainId, isSDKLoaded]);
-
+export default function Demo() {
+  const { isSDKLoaded, context } = useFrame();
   const {
-    sendTransaction,
-    error: sendTxError,
-    isError: isSendTxError,
-    isPending: isSendTxPending,
-  } = useSendTransaction();
+    connectToSocket,
+    disconnectFromSocket,
+    kuroData,
+    setPoolStatus,
+    poolStatus,
+    winnerData,
+    refetchHistories,
+  } = useKuro();
+  const { address } = useAccount();
+  // có thể chỉnh sửa
+  const [timeToShowWinner, setTimeToShowWinner] = useState<number>(
+    TimeEnum._15SECS
+  ); // Thời gian hiển thị người chiến thắng (30 giây)
 
-  const { isLoading: isConfirming, isSuccess: isConfirmed } =
-    useWaitForTransactionReceipt({
-      hash: txHash as `0x${string}`,
+  const [spinDuration] = useState<number>(TimeEnum._5SECS); // Thời gian quay mặc định: 5 giây
+  const [fullRotations] = useState<number>(5); // Số vòng quay mặc định: 5 vòng
+
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number>(
+    timeToShowWinner / 1000
+  );
+
+  const [pool, setPool] = useState<Map<string, number>>(new Map());
+  const [progress, setProgress] = useState<number>(1);
+  const [dotCount, setDotCount] = useState(0);
+  const [isYouAreWinner, setIsYouAreWinner] = useState(false);
+  const [isShowingWinner, setIsShowingWinner] = useState(false);
+
+  const mapToData = (
+    map: Map<string, number>
+  ): { label: string; value: number; color: string }[] => {
+    const data: { label: string; value: number; color: string }[] = [];
+
+    let index = 0;
+    map.forEach((value, label) => {
+      data.push({
+        label,
+        value,
+        color: colors[index % colors.length], // Lấy màu theo index, vòng lại nếu vượt quá độ dài mảng colors
+      });
+      index++;
     });
 
-  const {
-    signTypedData,
-    error: signTypedError,
-    isError: isSignTypedError,
-    isPending: isSignTypedPending,
-  } = useSignTypedData();
+    return data;
+  };
 
-  const { disconnect } = useDisconnect();
-  const { connect, connectors } = useConnect();
+  const spinWheel = async (winner: string) => {
+    if (poolStatus == PoolStatus.SPINNING) return;
+    if (pool.size == 0) return;
 
-  const {
-    switchChain,
-    error: switchChainError,
-    isError: isSwitchChainError,
-    isPending: isSwitchChainPending,
-  } = useSwitchChain();
-
-  const nextChain = useMemo(() => {
-    if (chainId === base.id) {
-      return optimism;
-    } else if (chainId === optimism.id) {
-      return degen;
-    } else if (chainId === degen.id) {
-      return mainnet;
-    } else if (chainId === mainnet.id) {
-      return unichain;
-    } else {
-      return base;
-    }
-  }, [chainId]);
-
-  const handleSwitchChain = useCallback(() => {
-    switchChain({ chainId: nextChain.id });
-  }, [switchChain, nextChain.id]);
-
-  const sendNotification = useCallback(async () => {
-    setSendNotificationResult("");
-    if (!notificationDetails || !context) {
+    if (!pool.has(winner)) {
+      toast.error(`Winner ${winner} is not exists`);
       return;
     }
 
-    try {
-      const response = await fetch("/api/send-notification", {
-        method: "POST",
-        mode: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fid: context.user.fid,
-          notificationDetails,
-        }),
-      });
+    setPoolStatus(PoolStatus.SPINNING);
+    const { start, end } = calculateRangeDegByOwner(winner, pool);
 
-      if (response.status === 200) {
-        setSendNotificationResult("Success");
-        return;
-      } else if (response.status === 429) {
-        setSendNotificationResult("Rate limited");
-        return;
-      }
+    const targetAngle =
+      start +
+      (end - start) / 2 +
+      ((end - start) / 2) * (Math.random() * 1.6 - 0.8);
+    const adjustmentAngle = 360 * fullRotations + targetAngle;
 
-      const data = await response.text();
-      setSendNotificationResult(`Error: ${data}`);
-    } catch (error) {
-      setSendNotificationResult(`Error: ${error}`);
+    if (chartRef.current) {
+      const chartContainer = chartRef.current;
+      chartContainer.style.transform = `rotate(${-adjustmentAngle}deg)`;
+      chartContainer.style.transition = `transform ${spinDuration}ms ease-out`;
+
+      setTimeout(() => {
+        countdown(timeToShowWinner / 1000);
+        setPoolStatus(PoolStatus.FINISHED);
+        setIsYouAreWinner(winner === address);
+        refetchHistories(1);
+        chartContainer.style.transform = `rotate(${-targetAngle}deg)`;
+        chartContainer.style.transition = `none`;
+
+        // show popup người chiến thắng chỗ này
+      }, spinDuration);
     }
-  }, [context, notificationDetails]);
+  };
 
-  const sendTx = useCallback(() => {
-    sendTransaction(
-      {
-        // call yoink() on Yoink contract
-        to: "0x4bBFD120d9f352A0BEd7a014bd67913a2007a878",
-        data: "0x9846cd9efc000023c0",
-      },
-      {
-        onSuccess: (hash) => {
-          setTxHash(hash);
-        },
-      }
-    );
-  }, [sendTransaction]);
-
-  const signTyped = useCallback(() => {
-    signTypedData({
-      domain: {
-        name: "Frames v2 Demo",
-        version: "1",
-        chainId,
-      },
-      types: {
-        Message: [{ name: "content", type: "string" }],
-      },
-      message: {
-        content: "Hello from Frames v2!",
-      },
-      primaryType: "Message",
+  const calculateTotalPool = (map: Map<string, number>): number => {
+    let totalPool = 0;
+    map.forEach((value) => {
+      totalPool += value;
     });
-  }, [chainId, signTypedData]);
+    return totalPool;
+  };
 
-  const toggleContext = useCallback(() => {
-    setIsContextOpen((prev) => !prev);
+  const calculateDegCornerByOwner = (
+    address: string,
+    map: Map<string, number>
+  ): number => {
+    const poolOfOwner = map.get(address);
+    const totalPool = calculateTotalPool(map);
+    let ownerDeg = 0;
+
+    if (!poolOfOwner) return 0;
+    if (totalPool === 0) return 0;
+
+    ownerDeg = (360 * poolOfOwner) / totalPool;
+    return ownerDeg;
+  };
+
+  const calculateRangeDegByOwner = (
+    owner: string,
+    map: Map<string, number>
+  ): { start: number; end: number } => {
+    let startDeg = 0;
+    let endDeg = 0;
+
+    for (const [key] of map) {
+      if (key !== owner) {
+        startDeg += calculateDegCornerByOwner(key, map);
+      } else {
+        endDeg = startDeg + calculateDegCornerByOwner(owner, map);
+        break;
+      }
+    }
+
+    return { start: startDeg, end: endDeg };
+  };
+
+  const countdown = (seconds: number): void => {
+    // Kiểm tra nếu số giây âm thì không chạy
+    if (seconds < 0) {
+      return;
+    }
+
+    let remainingTime = seconds;
+    setIsShowingWinner(true);
+    // Tạo một interval chạy mỗi 1 giây (1000ms)
+    const timer = setInterval(() => {
+      if (remainingTime > 0) {
+        remainingTime--;
+        setTimeRemaining(remainingTime);
+      } else {
+        setTimeRemaining(timeToShowWinner / 1000);
+        setIsShowingWinner(false);
+        clearInterval(timer);
+      }
+    }, 1000);
+  };
+
+  useEffect(() => {
+    const updateTimer = async () => {
+      if (kuroData?.startTime && kuroData.endTime) {
+        const now = new Date().getTime() / 1000;
+
+        const rangeTime = kuroData?.endTime - kuroData.startTime;
+        const process = now - kuroData?.startTime;
+
+        if (process > rangeTime) {
+          setPoolStatus(PoolStatus.DRAWING_WINNER);
+          setProgress(0);
+          clearInterval(currentInterval);
+        } else {
+          setProgress(1 - process / rangeTime);
+        }
+      }
+    };
+    const currentInterval = setInterval(updateTimer, 10);
+
+    return () => {
+      clearInterval(currentInterval);
+    };
+  }, [kuroData]);
+
+  useEffect(() => {
+    if (!kuroData) return;
+
+    const newPool = new Map<string, number>();
+
+    if (kuroData.participants.length > 0) {
+      kuroData.participants.forEach((player: Participant) => {
+        if (parseFloat(player.deposit) > 0) {
+          newPool.set(player.address, parseFloat(player.deposit));
+        }
+      });
+    } else if (parseFloat(kuroData.totalValue) > 0) {
+      // Fallback nếu chưa có thông tin players
+      newPool.set("Current Pool", parseFloat(kuroData.totalValue));
+    }
+
+    if (poolStatus == PoolStatus.DRAWING_WINNER) {
+      setPool(newPool);
+      return;
+    }
+
+    setPoolStatus(PoolStatus.DEPOSIT_IN_PROGRESS);
+
+    setPool(newPool);
+  }, [kuroData]);
+
+  useEffect(() => {
+    if (winnerData && poolStatus !== PoolStatus.SPINNING) {
+      spinWheel(winnerData.winner);
+    }
+  }, [winnerData]);
+
+  useEffect(() => {
+    if (poolStatus === PoolStatus.DRAWING_WINNER) {
+      const interval = setInterval(() => {
+        setDotCount((prev) => (prev + 1) % 4);
+      }, 500);
+      return () => clearInterval(interval);
+    }
+  }, [poolStatus]);
+
+  useEffect(() => {
+    if (isYouAreWinner) {
+      setTimeout(() => {
+        setIsYouAreWinner(false);
+      }, TimeEnum._9SECS);
+    }
+  }, [isYouAreWinner]);
+
+  useEffect(() => {
+    // Kết nối socket khi vào trang Kuro
+    connectToSocket();
+
+    // Cleanup khi rời khỏi trang
+    return () => {
+      disconnectFromSocket();
+    };
   }, []);
 
   if (!isSDKLoaded) {
@@ -175,479 +319,147 @@ export default function Demo(
         paddingRight: context?.client.safeAreaInsets?.right ?? 0,
       }}
     >
-      <div className="w-[300px] mx-auto py-2 px-2">
-        <h1 className="text-2xl font-bold text-center mb-4">{title}</h1>
+      <div
+        style={{
+          margin: "0 auto",
+          textAlign: "center",
+          position: "relative",
+          padding: "20px",
+        }}
+        className="w-fit"
+      >
+        <div className="relative h-fit w-fit rounded-full p-3">
+          <Image
+            src={"/images/arrow.svg"}
+            alt="arrow"
+            width={44}
+            height={44}
+            className="absolute left-1/2 top-[20%] z-10 -translate-x-1/2 rotate-180"
+          />
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-bold">
+            {poolStatus === PoolStatus.DEPOSIT_IN_PROGRESS && (
+              <>
+                <p className="text-center opacity-50">$MON</p>
+                <p className="text-center font-gajraj text-[40px] leading-[52px]">
+                  {formatEther(kuroData?.totalValue || "0")}
+                </p>
+                <p className="text-center opacity-50">Deposited</p>
+              </>
+            )}
 
-        <div className="mb-4">
-          <h2 className="font-2xl font-bold">Context</h2>
-          <button
-            onClick={toggleContext}
-            className="flex items-center gap-2 transition-colors"
+            {poolStatus === PoolStatus.DRAWING_WINNER && (
+              <>
+                <p className="text-center opacity-50">
+                  Drawing winner{".".repeat(dotCount)}
+                </p>
+              </>
+            )}
+
+            {isShowingWinner && (
+              <>
+                <p className="text-center opacity-50">
+                  Winner is {winnerData?.winner.substring(0, 6)}...
+                </p>
+                <p className="text-center opacity-50">
+                  Next round in {timeRemaining}s
+                </p>
+              </>
+            )}
+          </div>
+          <div className="absolute left-1/2 top-1/2 h-[80%] w-[80%] -translate-x-1/2 -translate-y-1/2 rotate-90">
+            <svg className="h-full w-full" viewBox="0 0 100 100">
+              <defs>
+                <clipPath id="circleClip">
+                  <path
+                    d={`
+                     M 50 5
+                     A 45 45 0 ${progress > 0.5 ? 1 : 0} 1 ${
+                      50 + 45 * Math.cos(2 * Math.PI * progress - Math.PI / 2)
+                    } ${
+                      50 + 45 * Math.sin(2 * Math.PI * progress - Math.PI / 2)
+                    }
+                     L 50 50
+                     Z
+                   `}
+                    fill="#000"
+                  />
+                </clipPath>
+              </defs>
+              <circle
+                cx="50"
+                cy="50"
+                r="45"
+                fill="none"
+                stroke="#fff13f"
+                strokeWidth="2"
+                strokeDasharray="5 2" // Tạo hiệu ứng dashed
+                clipPath="url(#circleClip)"
+                style={{
+                  transition: "all 1s linear", // Hiệu ứng mượt mà
+                  transform: "rotate(-90deg)", // Bắt đầu từ đỉnh
+                  transformOrigin: "center",
+                }}
+                className="transition-all duration-500"
+              />
+            </svg>
+          </div>
+          <div
+            ref={chartRef}
+            style={{
+              position: "relative",
+              width: "300px",
+              height: "300px",
+              transformOrigin: "center center",
+            }}
+            className="pool-wheel-custom"
           >
-            <span
-              className={`transform transition-transform ${
-                isContextOpen ? "rotate-90" : ""
-              }`}
-            >
-              ➤
-            </span>
-            Tap to expand
-          </button>
+            <PieChart
+              series={[
+                {
+                  innerRadius: 130,
+                  outerRadius: 150,
+                  paddingAngle: 2,
+                  cornerRadius: 40,
+                  startAngle: 0,
+                  endAngle: 360,
+                  data:
+                    mapToData(pool).length > 0
+                      ? mapToData(pool).map((d, index) => ({
+                          label: formatEthereumAddress(d.label),
+                          id: d.label,
+                          value: Number(convertWeiToEther(BigInt(d.value))),
+                          color: colors[index % colors.length],
+                        }))
+                      : [
+                          {
+                            label: "No Data",
+                            id: "no-data",
+                            value: 1,
+                          },
+                        ],
 
-          {isContextOpen && (
-            <div className="p-4 mt-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
-              <pre className="font-mono text-xs whitespace-pre-wrap break-words max-w-[260px] overflow-x-">
-                {JSON.stringify(context, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
+                  valueFormatter: (value: { value: number }) => {
+                    return mapToData(pool).length > 0
+                      ? `${value.value} MON`
+                      : "No deposits yet";
+                  },
 
-        <div>
-          <h2 className="font-2xl font-bold">Actions</h2>
-
-          <div className="mb-4">
-            <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg my-2">
-              <pre className="font-mono text-xs whitespace-pre-wrap break-words max-w-[260px] overflow-x-">
-                sdk.actions.signIn
-              </pre>
-            </div>
-            <SignIn />
+                  highlightScope: { fade: "global", highlight: "item" },
+                  faded: {
+                    innerRadius: 110,
+                    additionalRadius: -30,
+                    color: "gray",
+                  },
+                },
+              ]}
+              margin={{ right: 5 }}
+              width={300}
+              height={300}
+              hideLegend
+            />
           </div>
-
-          <div className="mb-4">
-            <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg my-2">
-              <pre className="font-mono text-xs whitespace-pre-wrap break-words max-w-[260px] overflow-x-">
-                sdk.actions.openUrl
-              </pre>
-            </div>
-            <Button onClick={() => openUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ")}>Open Link</Button>
-          </div>
-
-          <div className="mb-4">
-            <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg my-2">
-              <pre className="font-mono text-xs whitespace-pre-wrap break-words max-w-[260px] overflow-x-">
-                sdk.actions.viewProfile
-              </pre>
-            </div>
-            <ViewProfile />
-          </div>
-
-          <div className="mb-4">
-            <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg my-2">
-              <pre className="font-mono text-xs whitespace-pre-wrap break-words max-w-[260px] overflow-x-">
-                sdk.actions.close
-              </pre>
-            </div>
-            <Button onClick={close}>Close Frame</Button>
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <h2 className="font-2xl font-bold">Last event</h2>
-
-          <div className="p-4 mt-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
-            <pre className="font-mono text-xs whitespace-pre-wrap break-words max-w-[260px] overflow-x-">
-              {lastEvent || "none"}
-            </pre>
-          </div>
-        </div>
-
-        <div>
-          <h2 className="font-2xl font-bold">Add to client & notifications</h2>
-
-          <div className="mt-2 mb-4 text-sm">
-            Client fid {context?.client.clientFid},
-            {added ? " frame added to client," : " frame not added to client,"}
-            {notificationDetails
-              ? " notifications enabled"
-              : " notifications disabled"}
-          </div>
-
-          <div className="mb-4">
-            <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg my-2">
-              <pre className="font-mono text-xs whitespace-pre-wrap break-words max-w-[260px] overflow-x-">
-                sdk.actions.addFrame
-              </pre>
-            </div>
-            {addFrameResult && (
-              <div className="mb-2 text-sm">
-                Add frame result: {addFrameResult}
-              </div>
-            )}
-            <Button onClick={addFrame} disabled={added}>
-              Add frame to client
-            </Button>
-          </div>
-
-          {sendNotificationResult && (
-            <div className="mb-2 text-sm">
-              Send notification result: {sendNotificationResult}
-            </div>
-          )}
-          <div className="mb-4">
-            <Button onClick={sendNotification} disabled={!notificationDetails}>
-              Send notification
-            </Button>
-          </div>
-
-          <div className="mb-4">
-            <Button 
-              onClick={async () => {
-                if (context?.user?.fid) {
-                  const shareUrl = `${process.env.NEXT_PUBLIC_URL}/share/${context.user.fid}`;
-                  await navigator.clipboard.writeText(shareUrl);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }
-              }}
-              disabled={!context?.user?.fid}
-            >
-              {copied ? "Copied!" : "Copy share URL"}
-            </Button>
-          </div>
-        </div>
-
-        <div>
-          <h2 className="font-2xl font-bold">Wallet</h2>
-
-          {address && (
-            <div className="my-2 text-xs">
-              Address: <pre className="inline">{truncateAddress(address)}</pre>
-            </div>
-          )}
-
-          {chainId && (
-            <div className="my-2 text-xs">
-              Chain ID: <pre className="inline">{chainId}</pre>
-            </div>
-          )}
-
-          <div className="mb-4">
-            {isConnected ? (
-              <Button
-                onClick={() => disconnect()}
-                className="w-full"
-              >
-                Disconnect
-              </Button>
-            ) : context ? (
-              /* if context is not null, mini app is running in frame client */
-              <Button
-                onClick={() => connect({ connector: connectors[0] })}
-                className="w-full"
-              >
-                Connect
-              </Button>
-            ) : (
-              /* if context is null, mini app is running in browser */
-              <div className="space-y-2">
-                <Button
-                  onClick={() => connect({ connector: connectors[1] })}
-                  className="w-full"
-                >
-                  Connect Coinbase Wallet
-                </Button>
-                <Button
-                  onClick={() => connect({ connector: connectors[2] })}
-                  className="w-full"
-                >
-                  Connect MetaMask
-                </Button>
-              </div>
-            )}
-          </div>
-
-          <div className="mb-4">
-            <SignMessage />
-          </div>
-
-          {isConnected && (
-            <>
-              <div className="mb-4">
-                <SendEth />
-              </div>
-              <div className="mb-4">
-                <Button
-                  onClick={sendTx}
-                  disabled={!isConnected || isSendTxPending}
-                  isLoading={isSendTxPending}
-                >
-                  Send Transaction (contract)
-                </Button>
-                {isSendTxError && renderError(sendTxError)}
-                {txHash && (
-                  <div className="mt-2 text-xs">
-                    <div>Hash: {truncateAddress(txHash)}</div>
-                    <div>
-                      Status:{" "}
-                      {isConfirming
-                        ? "Confirming..."
-                        : isConfirmed
-                        ? "Confirmed!"
-                        : "Pending"}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="mb-4">
-                <Button
-                  onClick={signTyped}
-                  disabled={!isConnected || isSignTypedPending}
-                  isLoading={isSignTypedPending}
-                >
-                  Sign Typed Data
-                </Button>
-                {isSignTypedError && renderError(signTypedError)}
-              </div>
-              <div className="mb-4">
-                <Button
-                  onClick={handleSwitchChain}
-                  disabled={isSwitchChainPending}
-                  isLoading={isSwitchChainPending}
-                >
-                  Switch to {nextChain.name}
-                </Button>
-                {isSwitchChainError && renderError(switchChainError)}
-              </div>
-            </>
-          )}
         </div>
       </div>
     </div>
   );
 }
-
-function SignMessage() {
-  const { isConnected } = useAccount();
-  const { connectAsync } = useConnect();
-  const {
-    signMessage,
-    data: signature,
-    error: signError,
-    isError: isSignError,
-    isPending: isSignPending,
-  } = useSignMessage();
-
-  const handleSignMessage = useCallback(async () => {
-    if (!isConnected) {
-      await connectAsync({
-        chainId: base.id,
-        connector: config.connectors[0],
-      });
-    }
-
-    signMessage({ message: "Hello from Frames v2!" });
-  }, [connectAsync, isConnected, signMessage]);
-
-  return (
-    <>
-      <Button
-        onClick={handleSignMessage}
-        disabled={isSignPending}
-        isLoading={isSignPending}
-      >
-        Sign Message
-      </Button>
-      {isSignError && renderError(signError)}
-      {signature && (
-        <div className="mt-2 text-xs">
-          <div>Signature: {signature}</div>
-        </div>
-      )}
-    </>
-  );
-}
-
-function SendEth() {
-  const { isConnected, chainId } = useAccount();
-  const {
-    sendTransaction,
-    data,
-    error: sendTxError,
-    isError: isSendTxError,
-    isPending: isSendTxPending,
-  } = useSendTransaction();
-
-  const { isLoading: isConfirming, isSuccess: isConfirmed } =
-    useWaitForTransactionReceipt({
-      hash: data,
-    });
-
-  const toAddr = useMemo(() => {
-    // Protocol guild address
-    return chainId === base.id
-      ? "0x32e3C7fD24e175701A35c224f2238d18439C7dBC"
-      : "0xB3d8d7887693a9852734b4D25e9C0Bb35Ba8a830";
-  }, [chainId]);
-
-  const handleSend = useCallback(() => {
-    sendTransaction({
-      to: toAddr,
-      value: 1n,
-    });
-  }, [toAddr, sendTransaction]);
-
-  return (
-    <>
-      <Button
-        onClick={handleSend}
-        disabled={!isConnected || isSendTxPending}
-        isLoading={isSendTxPending}
-      >
-        Send Transaction (eth)
-      </Button>
-      {isSendTxError && renderError(sendTxError)}
-      {data && (
-        <div className="mt-2 text-xs">
-          <div>Hash: {truncateAddress(data)}</div>
-          <div>
-            Status:{" "}
-            {isConfirming
-              ? "Confirming..."
-              : isConfirmed
-              ? "Confirmed!"
-              : "Pending"}
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-function SignIn() {
-  const [signingIn, setSigningIn] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
-  const [signInResult, setSignInResult] = useState<SignInCore.SignInResult>();
-  const [signInFailure, setSignInFailure] = useState<string>();
-  const { data: session, status } = useSession();
-
-  const getNonce = useCallback(async () => {
-    const nonce = await getCsrfToken();
-    if (!nonce) throw new Error("Unable to generate nonce");
-    return nonce;
-  }, []);
-
-  const handleSignIn = useCallback(async () => {
-    try {
-      setSigningIn(true);
-      setSignInFailure(undefined);
-      const nonce = await getNonce();
-      const result = await sdk.actions.signIn({ nonce });
-      setSignInResult(result);
-
-      await signIn("credentials", {
-        message: result.message,
-        signature: result.signature,
-        redirect: false,
-      });
-    } catch (e) {
-      if (e instanceof SignInCore.RejectedByUser) {
-        setSignInFailure("Rejected by user");
-        return;
-      }
-
-      setSignInFailure("Unknown error");
-    } finally {
-      setSigningIn(false);
-    }
-  }, [getNonce]);
-
-  const handleSignOut = useCallback(async () => {
-    try {
-      setSigningOut(true);
-      await signOut({ redirect: false });
-      setSignInResult(undefined);
-    } finally {
-      setSigningOut(false);
-    }
-  }, []);
-
-  return (
-    <>
-      {status !== "authenticated" && (
-        <Button onClick={handleSignIn} disabled={signingIn}>
-          Sign In with Farcaster
-        </Button>
-      )}
-      {status === "authenticated" && (
-        <Button onClick={handleSignOut} disabled={signingOut}>
-          Sign out
-        </Button>
-      )}
-      {session && (
-        <div className="my-2 p-2 text-xs overflow-x-scroll bg-gray-100 rounded-lg font-mono">
-          <div className="font-semibold text-gray-500 mb-1">Session</div>
-          <div className="whitespace-pre">
-            {JSON.stringify(session, null, 2)}
-          </div>
-        </div>
-      )}
-      {signInFailure && !signingIn && (
-        <div className="my-2 p-2 text-xs overflow-x-scroll bg-gray-100 rounded-lg font-mono">
-          <div className="font-semibold text-gray-500 mb-1">SIWF Result</div>
-          <div className="whitespace-pre">{signInFailure}</div>
-        </div>
-      )}
-      {signInResult && !signingIn && (
-        <div className="my-2 p-2 text-xs overflow-x-scroll bg-gray-100 rounded-lg font-mono">
-          <div className="font-semibold text-gray-500 mb-1">SIWF Result</div>
-          <div className="whitespace-pre">
-            {JSON.stringify(signInResult, null, 2)}
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-function ViewProfile() {
-  const [fid, setFid] = useState("3");
-
-  return (
-    <>
-      <div>
-        <Label
-          className="text-xs font-semibold text-gray-500 mb-1"
-          htmlFor="view-profile-fid"
-        >
-          Fid
-        </Label>
-        <Input
-          id="view-profile-fid"
-          type="number"
-          value={fid}
-          className="mb-2"
-          onChange={(e) => {
-            setFid(e.target.value);
-          }}
-          step="1"
-          min="1"
-        />
-      </div>
-      <Button
-        onClick={() => {
-          sdk.actions.viewProfile({ fid: parseInt(fid) });
-        }}
-      >
-        View Profile
-      </Button>
-    </>
-  );
-}
-
-const renderError = (error: Error | null) => {
-  if (!error) return null;
-  if (error instanceof BaseError) {
-    const isUserRejection = error.walk(
-      (e) => e instanceof UserRejectedRequestError
-    );
-
-    if (isUserRejection) {
-      return <div className="text-red-500 text-xs mt-1">Rejected by user.</div>;
-    }
-  }
-
-  return <div className="text-red-500 text-xs mt-1">{error.message}</div>;
-};
-
