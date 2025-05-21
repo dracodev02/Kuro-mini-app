@@ -43,3 +43,4 @@ npm run build
 ```
 
 The above command will generate a `.env` file based on the `.env.local` file and user input. Be sure to configure those environment variables on your hosting platform.
+# Kuro-mini-app
