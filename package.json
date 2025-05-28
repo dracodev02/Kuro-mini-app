@@ -1,20 +1,11 @@
 {
   "name": "Kuro-mini-app",
   "version": "0.1.0",
-  "type": "module",
-  "private": false,
-  "access": "public",
-  "exports": {
-    ".": {
-      "types": "./index.d.ts",
-      "import": "./bin/init.js"
-    }
-  },
-  "types": "./index.d.ts",
+  "private": true,
   "scripts": {
     "dev": "node scripts/dev.js",
     "build": "next build",
-    "start": "next start -p 4999",
+    "start": "next start -p 4989",
     "lint": "next lint",
     "deploy:vercel": "node scripts/deploy.js",
     "cleanup": "lsof -ti :3000 | xargs kill -9"
