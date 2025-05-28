@@ -1,14 +1,28 @@
 "use client";
-import { createContext, useContext, useEffect, useState, useRef } from "react";
-
-import { useAccount, useSignMessage } from "wagmi";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+} from "react";
+import { toast } from "react-toastify";
+import {
+  useAccount,
+  useSignMessage,
+  useConnectorClient,
+  useBalance,
+} from "wagmi";
 import Cookies from "js-cookie";
-import axiosInstance from "~/lib/axios";
+import { useAppKitAccount } from "@reown/appkit/react";
+import { monadTestnet } from "wagmi/chains";
+import { convertWeiToEther } from "~/utils/string";
+import { deleteCookie, getCookie, setCookie } from "~/utils/cookie";
 import useRequestSignature from "~/app/api/useGetSignature";
 import usePostVerify from "~/app/api/usePostVerify";
 import useGetUserInfo from "~/app/api/useGetUserInfo";
-import { deleteCookie, getCookie, setCookie } from "~/utils/cookie";
-import { toast } from "react-toastify";
+import axiosInstance from "~/lib/axios";
 
 type AuthContextType = {
   signMessageWithSign: () => void;
@@ -23,15 +37,49 @@ type AuthContextType = {
   isSyncMessage: boolean;
   refreshAccessToken: () => Promise<boolean>;
   logout: () => void;
+  nativeBalance: string;
+  updateNativeBalance: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected } = useAppKitAccount();
   const [isSyncMessage, setIsSyncMessage] = useState(false);
+  const { status } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const [user, setUser] = useState();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [nativeBalance, setNativeBalance] = useState<string>("0");
+
+  const { data: nativeBalanceData, refetch: refetchNativeBalance } = useBalance(
+    {
+      address: address as any,
+      blockTag: "latest",
+      chainId: monadTestnet.id,
+      query: {
+        refetchInterval: false,
+        staleTime: 0,
+        gcTime: 0,
+        refetchOnMount: true,
+        refetchOnReconnect: true,
+        refetchOnWindowFocus: true,
+      },
+    }
+  );
+
+  const updateNativeBalance = useCallback(async () => {
+    if (!address) {
+      setNativeBalance("0");
+
+      return;
+    }
+    setTimeout(async () => {
+      const newBalance = await refetchNativeBalance();
+      console.log("🚀 ~ updateNativeBalance ~ newBalance:", newBalance);
+      setNativeBalance(convertWeiToEther(newBalance.data?.value || 0));
+    }, 4000);
+  }, [address]);
 
   const prevAddressRef = useRef<string | null>(null);
 
@@ -64,6 +112,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Hàm làm mới access token
   const refreshAccessToken = async (): Promise<boolean> => {
     try {
+      setIsRefreshing(true);
       const refreshToken = Cookies.get("refreshToken");
 
       if (!refreshToken) {
@@ -108,6 +157,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Error refreshing token:", error);
       return false;
     } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -262,6 +312,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [address]);
 
   useEffect(() => {
+    console.log("🚀 ~ AuthProvider ~ nativeBalanceData:", nativeBalanceData);
+
+    if (nativeBalanceData) {
+      setNativeBalance(convertWeiToEther(nativeBalanceData.value || 0));
+    }
+  }, [nativeBalanceData]);
+
+  useEffect(() => {
     if (isConnected && !Cookies.get("accessToken")) {
       signMessageWithSign();
     } else if (isConnected && Cookies.get("accessToken")) {
@@ -280,6 +338,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     isSyncMessage,
     refreshAccessToken,
     logout,
+    nativeBalance,
+    updateNativeBalance,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -149,3 +149,33 @@ input[type="number"] {
   -webkit-background-clip: text;
   padding: 10px;
 }
+
+@layer utilities {
+  .ellipsis {
+    display: inline-block;
+    overflow: hidden;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+
+  .ellipsis::after {
+    content: "...";
+    display: inline-block;
+    animation: ellipsis 1.5s infinite;
+  }
+
+  @keyframes ellipsis {
+    0% {
+      width: 0;
+    }
+    33% {
+      width: 0.33em;
+    }
+    66% {
+      width: 0.66em;
+    }
+    100% {
+      width: 1em;
+    }
+  }
+}

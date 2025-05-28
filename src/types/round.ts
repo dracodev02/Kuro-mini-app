@@ -132,3 +132,19 @@ export interface KinpuRoundHistory {
     winners: KinpuWinner[];
     carryOverReward: string;
 }
+
+export interface KuroWinnerAnnounced {
+  data: {
+    drawnAt: number;
+    participants: KuroParticipant[];
+    roundId: number;
+    totalValue: string;
+    winner: string;
+  }
+}
+
+export interface KuroParticipant {
+  address: string;
+  deposit: string;
+  _id: string;
+}

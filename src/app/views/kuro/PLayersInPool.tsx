@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { colors } from "~/components/Demo";
 import { Participant, useKuro } from "~/context/KuroContext";
 import PlayerItem from "./PlayerItem";
+import { IconX } from "@tabler/icons-react";
 
 interface ColoredParticipant extends Participant {
   color: string;
@@ -54,10 +55,9 @@ const Overlay: React.FC<OverlayProps> = ({ isOpen, setIsOpen }) => {
           isOpen ? "translate-y-0" : "translate-y-full"
         }`}
       >
-        <div
-          onClick={() => setIsOpen(false)}
-          className="w-12 h-2 bg-gray mx-auto rounded-full cursor-grab"
-        />
+        <div className="flex justify-end">
+          <IconX stroke={2} onClick={() => setIsOpen(false)} />
+        </div>
         <div className="mt-6 flex flex-1 flex-col gap-2.5 overflow-auto mb-6">
           {sortedPlayers.length === 0 && (
             <div className="text-center text-gray-500">No player in pool</div>

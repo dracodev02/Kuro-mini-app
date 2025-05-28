@@ -1,7 +1,7 @@
 "use client";
 import { useFrame } from "~/components/providers/FrameProvider";
 import { PieChart } from "@mui/x-charts/PieChart";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Participant,
   PoolStatus,
@@ -77,15 +77,8 @@ export const colors = [
 
 export default function Demo() {
   const { isSDKLoaded, context } = useFrame();
-  const {
-    connectToSocket,
-    disconnectFromSocket,
-    kuroData,
-    setPoolStatus,
-    poolStatus,
-    winnerData,
-    refetchHistories,
-  } = useKuro();
+  const { kuroData, setPoolStatus, poolStatus, winnerData, refetchHistories } =
+    useKuro();
   const { address } = useAccount();
   // có thể chỉnh sửa
   const [timeToShowWinner, setTimeToShowWinner] = useState<number>(
@@ -102,9 +95,7 @@ export default function Demo() {
 
   const [pool, setPool] = useState<Map<string, number>>(new Map());
   const [progress, setProgress] = useState<number>(1);
-  const [dotCount, setDotCount] = useState(0);
   const [isYouAreWinner, setIsYouAreWinner] = useState(false);
-  const [isShowingWinner, setIsShowingWinner] = useState(false);
 
   const mapToData = (
     map: Map<string, number>
@@ -124,41 +115,42 @@ export default function Demo() {
     return data;
   };
 
-  const spinWheel = async (winner: string) => {
-    if (poolStatus == PoolStatus.SPINNING) return;
-    if (pool.size == 0) return;
+  const spinWheel = useCallback(
+    async (winner: string) => {
+      if (pool.size == 0) return;
 
-    if (!pool.has(winner)) {
-      toast.error(`Winner ${winner} is not exists`);
-      return;
-    }
+      if (!pool.has(winner)) {
+        toast.error(`Winner ${winner} is not exists`);
+        return;
+      }
 
-    setPoolStatus(PoolStatus.SPINNING);
-    const { start, end } = calculateRangeDegByOwner(winner, pool);
+      const { start, end } = calculateRangeDegByOwner(winner, pool);
 
-    const targetAngle =
-      start +
-      (end - start) / 2 +
-      ((end - start) / 2) * (Math.random() * 1.6 - 0.8);
-    const adjustmentAngle = 360 * fullRotations + targetAngle;
+      const targetAngle =
+        start +
+        (end - start) / 2 +
+        ((end - start) / 2) * (Math.random() * 1.6 - 0.8);
+      const adjustmentAngle = 360 * fullRotations + targetAngle;
 
-    if (chartRef.current) {
-      const chartContainer = chartRef.current;
-      chartContainer.style.transform = `rotate(${-adjustmentAngle}deg)`;
-      chartContainer.style.transition = `transform ${spinDuration}ms ease-out`;
+      if (chartRef.current) {
+        const chartContainer = chartRef.current;
+        chartContainer.style.transform = `rotate(${-adjustmentAngle}deg)`;
+        chartContainer.style.transition = `transform ${spinDuration}ms ease-out`;
 
-      setTimeout(() => {
-        countdown(timeToShowWinner / 1000);
-        setPoolStatus(PoolStatus.FINISHED);
-        setIsYouAreWinner(winner === address);
-        refetchHistories(1);
-        chartContainer.style.transform = `rotate(${-targetAngle}deg)`;
-        chartContainer.style.transition = `none`;
+        setTimeout(() => {
+          setPoolStatus(PoolStatus.SHOWING_WINNER);
+          countdown(timeToShowWinner / 1000);
+          setIsYouAreWinner(winner === address);
+          refetchHistories(1);
+          chartContainer.style.transform = `rotate(${-targetAngle}deg)`;
+          chartContainer.style.transition = `none`;
 
-        // show popup người chiến thắng chỗ này
-      }, spinDuration);
-    }
-  };
+          // show popup người chiến thắng chỗ này
+        }, spinDuration);
+      }
+    },
+    [poolStatus]
+  );
 
   const calculateTotalPool = (map: Map<string, number>): number => {
     let totalPool = 0;
@@ -209,7 +201,6 @@ export default function Demo() {
     }
 
     let remainingTime = seconds;
-    setIsShowingWinner(true);
     // Tạo một interval chạy mỗi 1 giây (1000ms)
     const timer = setInterval(() => {
       if (remainingTime > 0) {
@@ -217,35 +208,25 @@ export default function Demo() {
         setTimeRemaining(remainingTime);
       } else {
         setTimeRemaining(timeToShowWinner / 1000);
-        setIsShowingWinner(false);
         clearInterval(timer);
       }
     }, 1000);
   };
 
-  useEffect(() => {
-    const updateTimer = async () => {
-      if (kuroData?.startTime && kuroData.endTime) {
-        const now = new Date().getTime() / 1000;
+  const updateTimer = async () => {
+    if (kuroData?.startTime && kuroData.endTime) {
+      const now = new Date().getTime() / 1000;
 
-        const rangeTime = kuroData?.endTime - kuroData.startTime;
-        const process = now - kuroData?.startTime;
+      const rangeTime = kuroData?.endTime - kuroData.startTime;
+      const process = now - kuroData?.startTime;
 
-        if (process > rangeTime) {
-          setPoolStatus(PoolStatus.DRAWING_WINNER);
-          setProgress(0);
-          clearInterval(currentInterval);
-        } else {
-          setProgress(1 - process / rangeTime);
-        }
+      if (process > rangeTime) {
+        setProgress(0);
+      } else {
+        setProgress(1 - process / rangeTime);
       }
-    };
-    const currentInterval = setInterval(updateTimer, 10);
-
-    return () => {
-      clearInterval(currentInterval);
-    };
-  }, [kuroData]);
+    }
+  };
 
   useEffect(() => {
     if (!kuroData) return;
@@ -262,31 +243,37 @@ export default function Demo() {
       // Fallback nếu chưa có thông tin players
       newPool.set("Current Pool", parseFloat(kuroData.totalValue));
     }
-
-    if (poolStatus == PoolStatus.DRAWING_WINNER) {
-      setPool(newPool);
-      return;
-    }
-
-    setPoolStatus(PoolStatus.DEPOSIT_IN_PROGRESS);
-
     setPool(newPool);
   }, [kuroData]);
 
   useEffect(() => {
-    if (winnerData && poolStatus !== PoolStatus.SPINNING) {
-      spinWheel(winnerData.winner);
-    }
-  }, [winnerData]);
+    let interval: NodeJS.Timeout | null = null;
+    let timeOut: NodeJS.Timeout | null = null;
 
-  useEffect(() => {
-    if (poolStatus === PoolStatus.DRAWING_WINNER) {
-      const interval = setInterval(() => {
-        setDotCount((prev) => (prev + 1) % 4);
-      }, 500);
-      return () => clearInterval(interval);
+    if (
+      poolStatus === PoolStatus.WAIT_FOR_FIST_DEPOSIT ||
+      poolStatus === PoolStatus.WAITING_FOR_NEXT_ROUND ||
+      poolStatus === PoolStatus.DRAWING_WINNER
+    ) {
+      return;
+    } else if (poolStatus === PoolStatus.DEPOSIT_IN_PROGRESS) {
+      interval = setInterval(updateTimer, 10);
+    } else if (poolStatus === PoolStatus.SPINNING && winnerData) {
+      spinWheel(winnerData.winner);
+    } else if (poolStatus === PoolStatus.SHOWING_WINNER) {
+      timeOut = setTimeout(() => {
+        setPoolStatus(PoolStatus.WAITING_FOR_NEXT_ROUND);
+      }, timeToShowWinner);
     }
-  }, [poolStatus]);
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+      if (timeOut) {
+        clearTimeout(timeOut);
+      }
+    };
+  }, [poolStatus, winnerData]);
 
   useEffect(() => {
     if (isYouAreWinner) {
@@ -295,16 +282,6 @@ export default function Demo() {
       }, TimeEnum._9SECS);
     }
   }, [isYouAreWinner]);
-
-  useEffect(() => {
-    // Kết nối socket khi vào trang Kuro
-    connectToSocket();
-
-    // Cleanup khi rời khỏi trang
-    return () => {
-      disconnectFromSocket();
-    };
-  }, []);
 
   if (!isSDKLoaded) {
     return <div>Loading...</div>;
@@ -337,10 +314,11 @@ export default function Demo() {
             className="absolute left-1/2 top-[20%] z-10 -translate-x-1/2 rotate-180"
           />
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-bold">
-            {poolStatus === PoolStatus.DEPOSIT_IN_PROGRESS && (
+            {(poolStatus === PoolStatus.DEPOSIT_IN_PROGRESS ||
+              poolStatus === PoolStatus.WAIT_FOR_FIST_DEPOSIT) && (
               <>
-                <p className="text-center opacity-50">$MON</p>
-                <p className="text-center font-gajraj text-[40px] leading-[52px]">
+                <p className="text-center">MON</p>
+                <p className="text-center font-gajraj text-[52px] leading-[52px]">
                   {formatEther(kuroData?.totalValue || "0")}
                 </p>
                 <p className="text-center opacity-50">Deposited</p>
@@ -349,16 +327,17 @@ export default function Demo() {
 
             {poolStatus === PoolStatus.DRAWING_WINNER && (
               <>
-                <p className="text-center opacity-50">
-                  Drawing winner{".".repeat(dotCount)}
+                <p className="ellipsis text-center opacity-50">
+                  Drawing winner
                 </p>
               </>
             )}
 
-            {isShowingWinner && (
+            {poolStatus === PoolStatus.SHOWING_WINNER && (
               <>
                 <p className="text-center opacity-50">
-                  Winner is {winnerData?.winner.substring(0, 6)}...
+                  Winner is {winnerData?.winner.slice(0, 6)}...
+                  {winnerData?.winner.slice(-4)}
                 </p>
                 <p className="text-center opacity-50">
                   Next round in {timeRemaining}s

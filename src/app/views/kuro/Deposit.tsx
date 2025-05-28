@@ -13,6 +13,7 @@ import {
 } from "wagmi";
 import { YoloABI } from "~/abi/YoloABI";
 import { Button } from "~/components/ui/Button";
+import { PoolStatus, useKuro } from "~/context/KuroContext";
 import { convertWeiToEther } from "~/utils/string";
 
 const Deposit = () => {
@@ -27,6 +28,7 @@ const Deposit = () => {
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   const { isConnected } = useAccount();
+  const { poolStatus } = useKuro();
 
   const connectWallet = async () => {
     try {
@@ -145,7 +147,12 @@ const Deposit = () => {
         <Button
           onClick={() => handleSubmit()}
           className="w-full"
-          disabled={!depositAmount || isDepositing}
+          disabled={
+            !depositAmount ||
+            isDepositing ||
+            (poolStatus !== PoolStatus.WAIT_FOR_FIST_DEPOSIT &&
+              poolStatus !== PoolStatus.DEPOSIT_IN_PROGRESS)
+          }
         >
           Submit
         </Button>

@@ -10,13 +10,17 @@ import React, {
 import { io, Socket as SocketIOClient } from "socket.io-client";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-
-import { useAccount, useWriteContract } from "wagmi";
-import { Round, RoundHistoryResponse } from "~/types/round";
+import { useReadContract, useWriteContract } from "wagmi";
 import { useAuth } from "./AuthContext";
+import { useAppKitAccount } from "@reown/appkit/react";
+import {
+  KuroWinnerAnnounced,
+  Round,
+  RoundHistoryResponse,
+} from "~/types/round";
+import useClaimKuroRound from "~/app/api/useClaimKuroRound";
 import { useGetKuroHistory } from "~/app/api/useGetKuroHistory";
 import { YoloABI } from "~/abi/YoloABI";
-import useClaimKuroRound from "~/app/api/useClaimKuroRound";
 
 export enum TimeEnum {
   _5SECS = 5 * 1000,
@@ -32,11 +36,14 @@ export enum TimeEnum {
 }
 
 export enum PoolStatus {
+  WAITING_FOR_NEXT_ROUND = "WAITING FOR NEXT ROUND",
   WAIT_FOR_FIST_DEPOSIT = "WAIT FOR FIRST DEPOSIT",
   DEPOSIT_IN_PROGRESS = "DEPOSIT IN PROGRESS",
   DRAWING_WINNER = "DRAWING WINNER",
   SPINNING = "SPINNING",
   FINISHED = "FINISHED",
+  CANCELED = "CANCELED",
+  SHOWING_WINNER = "SHOWING WINNER",
 }
 
 export enum KuroStatus {
@@ -142,7 +149,7 @@ const formatEther = (value: string): string => {
 };
 
 export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
-  const { address } = useAccount();
+  const { address } = useAppKitAccount();
 
   const { isSyncMessage, signMessageWithSign } = useAuth();
   const [socket, setSocket] = useState<SocketIOClient | null>(null);
@@ -159,13 +166,14 @@ export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
   );
   const [myWinHistories, setMyWinHistories] =
     useState<RoundHistoryResponse<Round> | null>(null);
+  const { updateNativeBalance } = useAuth();
 
   // Thêm state để theo dõi các vòng đã thông báo người thắng
   const [announcedRounds, setAnnouncedRounds] = useState<Set<number>>(
     new Set()
   );
 
-  const { writeContractAsync } = useWriteContract();
+  const { writeContractAsync, isPending: isDepositing } = useWriteContract();
   const _claimKuroRound = useClaimKuroRound();
 
   // URL của server WebSocket
@@ -208,6 +216,8 @@ export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
           error: "Claim failed. 🤯",
         })
         .then((txHash) => {
+          updateNativeBalance();
+
           _claimKuroRound
             .mutateAsync({
               roundId: roundId,
@@ -255,6 +265,7 @@ export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
           error: "Withdraw failed. 🤯",
         })
         .then((txHash) => {
+          updateNativeBalance();
           _claimKuroRound
             .mutateAsync({
               roundId: roundId,
@@ -325,13 +336,13 @@ export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
         console.log("Connected to socket server");
         setIsConnected(true);
         setReconnectAttempts(0);
-        // toast.success("Connected to websocket server");
+        toast.success("Connected to websocket server");
       });
 
       newSocket.on("disconnect", () => {
         console.log("Disconnected from socket server");
         setIsConnected(false);
-        // toast.info("Disconnected from websocket server");
+        toast.info("Disconnected from websocket server");
       });
 
       newSocket.on("connect_error", (error) => {
@@ -364,19 +375,50 @@ export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
 
       // Lắng nghe cập nhật dữ liệu Kuro từ server
       newSocket.on("kuroUpdate", (data: KuroData) => {
-        console.log("Received Kuro update:", data);
+        // console.log("Received Kuro update:", data);
+
+        // SPINNING or SHOWING_WINNER
+        if (
+          poolStatus === PoolStatus.SPINNING ||
+          poolStatus === PoolStatus.SHOWING_WINNER
+        ) {
+          console.log(
+            "Ignoring kuroUpdate due to SPINNING or SHOWING_WINNER state"
+          );
+          return;
+        }
 
         if (data.error && data.error === "No data available") {
           console.log(
             `Ignoring kuroUpdate with no data available for round ${data.roundId}`
           );
+          // resetStates();
           return;
+        } else {
+          setKuroData({
+            ...data,
+            endTime: data.endTime - TimeEnum._5SECS / 1000,
+          });
+
+          // DRAWING
+          if (
+            data.startTime > 0 &&
+            data.endTime > 0 &&
+            data.endTime - Date.now() / 1000 < 0
+          ) {
+            return;
+          }
+
+          // OPEN FOR DEPOSIT
+          if (data.startTime === 0 && data.endTime === 0) {
+            setPoolStatus(PoolStatus.WAIT_FOR_FIST_DEPOSIT);
+          }
+
+          // DEPOSIT_IN_PROGRESS
+          if (data.startTime > 0 && data.endTime > 0) {
+            setPoolStatus(PoolStatus.DEPOSIT_IN_PROGRESS);
+          }
         }
-        setWinnerData(null);
-        setKuroData({
-          ...data,
-          endTime: data.endTime - TimeEnum._5SECS / 1000,
-        });
       });
 
       // Lắng nghe sự kiện winnerAnnounced
@@ -401,6 +443,8 @@ export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
           totalValue: data.totalValue,
           participants: data.participants || [],
         });
+
+        setPoolStatus(PoolStatus.SPINNING);
       });
 
       // Lắng nghe sự kiện vòng mới
@@ -493,39 +537,17 @@ export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
     };
   }, []);
 
-  // Đếm ngược thời gian hiển thị người thắng
-  useEffect(() => {
-    if (!isShowingWinner || remainingWinnerTime <= 0) {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setRemainingWinnerTime((prev) => {
-        const newTime = prev - 1000;
-        if (newTime <= 0) {
-          clearInterval(interval);
-          setIsShowingWinner(false);
-          return 0;
-        }
-        return newTime;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [isShowingWinner, remainingWinnerTime]);
-
   useEffect(() => {
     const allHistoriesData = mutateAsyncHistory({
       page: 1,
       type: "all",
-      limit: 10,
+      limit: 100,
     });
 
     const myWinHistoriesData = mutateAsyncHistory({
       page: 1,
       type: "youWin",
-      limit: 10,
-      address: address,
+      limit: 100,
     });
 
     allHistoriesData.then((res) => {
@@ -539,7 +561,170 @@ export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
         setMyWinHistories(res);
       }
     });
-  }, [address]);
+  }, []);
+
+  const handleConnect = useCallback(() => {
+    console.log("Connected to socket server");
+    setIsConnected(true);
+    setReconnectAttempts(0);
+    // toast.success("Connected to websocket server");
+  }, []);
+
+  const handleDisconnect = useCallback(() => {
+    console.log("Disconnected from socket server");
+    setIsConnected(false);
+    toast.info("Disconnected from websocket server");
+  }, []);
+
+  const handleConnectError = useCallback(
+    (error: Error) => {
+      console.error("Socket connection error:", error);
+      setIsConnected(false);
+      setReconnectAttempts((prev) => prev + 1);
+      toast.error(
+        `Connection error: ${error.message}. Attempt ${reconnectAttempts + 1}/5`
+      );
+    },
+    [reconnectAttempts]
+  );
+
+  const handleReconnectFailed = useCallback(() => {
+    console.error("Socket reconnection failed after 5 attempts");
+    toast.error(
+      "Failed to reconnect after 5 attempts. Please try again later."
+    );
+    setReconnectAttempts(5);
+  }, []);
+
+  const handleReconnectAttempt = useCallback((attempt: number) => {
+    console.log(`Reconnection attempt ${attempt}/5`);
+    toast.info(`Attempting to reconnect: ${attempt}/5`);
+  }, []);
+
+  const handleWinnerAnnounced = useCallback(
+    (eventData: KuroWinnerAnnounced) => {
+      console.log("Winner announced event received:", eventData);
+
+      const { data } = eventData;
+      const roundId = Number(data.roundId);
+
+      // Đánh dấu vòng này đã được thông báo người thắng
+      setAnnouncedRounds((prev) => {
+        const newSet = new Set(prev);
+        newSet.add(roundId);
+        return newSet;
+      });
+
+      // Lưu thông tin người thắng
+      setWinnerData({
+        roundId: roundId,
+        winner: data.winner,
+        drawnAt: data.drawnAt,
+        totalValue: data.totalValue,
+        participants: data.participants || [],
+      });
+
+      setPoolStatus(PoolStatus.SPINNING);
+    },
+    []
+  );
+
+  const handleKuroUpdate = useCallback(
+    (data: KuroData) => {
+      // console.log("Received Kuro update:", data);
+
+      // SPINNING or SHOWING_WINNER
+      if (
+        poolStatus === PoolStatus.SPINNING ||
+        poolStatus === PoolStatus.SHOWING_WINNER
+      ) {
+        console.log(
+          "Ignoring kuroUpdate due to SPINNING or SHOWING_WINNER state"
+        );
+        return;
+      }
+
+      if (data.error && data.error === "No data available") {
+        console.log(
+          `Ignoring kuroUpdate with no data available for round ${data.roundId}`
+        );
+        // resetStates();
+        return;
+      } else {
+        setKuroData({
+          ...data,
+          endTime: data.endTime - TimeEnum._5SECS / 1000,
+        });
+
+        // DRAWING
+        if (
+          data.startTime > 0 &&
+          data.endTime > 0 &&
+          data.endTime - Date.now() / 1000 < 0
+        ) {
+          setPoolStatus(PoolStatus.DRAWING_WINNER);
+          return;
+        }
+
+        // OPEN FOR DEPOSIT
+        if (data.startTime === 0 && data.endTime === 0) {
+          setPoolStatus(PoolStatus.WAIT_FOR_FIST_DEPOSIT);
+        }
+
+        // DEPOSIT_IN_PROGRESS
+        if (data.startTime > 0 && data.endTime > 0) {
+          setPoolStatus(PoolStatus.DEPOSIT_IN_PROGRESS);
+        }
+      }
+    },
+    [poolStatus, setKuroData, setPoolStatus]
+  );
+
+  useEffect(() => {
+    if (!socket) return;
+
+    // Xóa các listener cũ
+    socket.off("connect");
+    socket.off("disconnect");
+    socket.off("connect_error");
+    socket.off("reconnect_failed");
+    socket.off("reconnect_attempt");
+    socket.off("kuroWinnerAnnounced");
+    socket.off("kuroRoundCancelled");
+    socket.off("kuroNewRound");
+    socket.off("kuroUpdate");
+    socket.off("subscribeToKuro");
+
+    // Đăng ký listener mới
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("connect_error", handleConnectError);
+    socket.on("reconnect_failed", handleReconnectFailed);
+    socket.on("reconnect_attempt", handleReconnectAttempt);
+    socket.on("kuroWinnerAnnounced", handleWinnerAnnounced);
+    socket.on("kuroUpdate", handleKuroUpdate);
+
+    // Cleanup khi socket thay đổi hoặc poolStatus thay đổi
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("connect_error", handleConnectError);
+      socket.off("reconnect_failed", handleReconnectFailed);
+      socket.off("reconnect_attempt", handleReconnectAttempt);
+      socket.off("kuroWinnerAnnounced", handleWinnerAnnounced);
+      socket.off("kuroUpdate", handleKuroUpdate);
+    };
+  }, [
+    socket,
+    poolStatus,
+    handleConnect,
+    handleDisconnect,
+    handleConnectError,
+    handleReconnectFailed,
+    handleReconnectAttempt,
+    handleWinnerAnnounced,
+    handleKuroUpdate,
+  ]);
 
   // Context value
   const value: KuroContextProps = {

@@ -12,8 +12,8 @@ const Navigator = () => {
   return (
     <>
       <Overlay isOpen={isOpen} setIsOpen={setIsOpen} />
-      <div className="flex justify-around bg-[#140C22] backdrop-blur p-4 fixed bottom-0 left-0 w-full">
-        <div className="flex flex-col justify-center items-center gap-2">
+      <div className="flex justify-around bg-[#140C22] backdrop-blur p-1 fixed bottom-0 left-0 w-full">
+        <div className="flex flex-col justify-center items-center">
           <Link
             href={"/"}
             onClick={() => setActiveTab(0)}
@@ -31,7 +31,7 @@ const Navigator = () => {
         </div>
         <div
           onClick={() => setIsOpen(true)}
-          className={`flex flex-col justify-center items-center gap-2 cursor-pointer ${
+          className={`flex flex-col justify-center items-center cursor-pointer ${
             activeTab == 1 ? "text-white" : "text-gray"
           }`}
         >
@@ -40,7 +40,7 @@ const Navigator = () => {
         </div>
         <Link
           href={"/history"}
-          className={`flex flex-col justify-center items-center gap-2 ${
+          className={`flex flex-col justify-center items-center ${
             activeTab == 2 ? "text-white" : "text-gray"
           }`}
         >
