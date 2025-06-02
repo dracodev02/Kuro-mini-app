@@ -8,31 +8,31 @@ export interface Player {
 export type RoundStatus = 'None' | 'Open' | 'Drawn' | 'Cancelled';
 
 export interface Round {
-    _id?: string;
-    roundId: number;
-    status: RoundStatus;
-    cutoffTime?: number;
-    numberOfParticipants: number;
-    totalValue: string;
-    winner: string;
-    participants: Player[];
-    completedAt?: Date;
-    endTime: number;
-    createdAt?: Date;
-    updatedAt?: Date;
-    winnerClaimed: boolean;
-    txClaimed: string;
+  _id?: string;
+  roundId: number;
+  status: RoundStatus;
+  cutoffTime?: number;
+  numberOfParticipants: number;
+  totalValue: string;
+  winner: string;
+  participants: KuroParticipant[];
+  completedAt?: Date;
+  endTime: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+  winnerClaimed: boolean;
+  txClaimed: string;
+  kuroContractAddress?: string;
 } 
 
 export interface RoundHistoryResponse<T> {
-    data: T[];
-    message: string;
-    page: number;
-    size: number;
-    success: boolean;
-    total: number;
+  data: T[];
+  message: string;
+  page: number;
+  size: number;
+  success: boolean;
+  total: number;
 }
-
 // {
 //     "_id": "682306e619caccbc0320ae4d",
 //     "roundId": "90",
@@ -70,67 +70,77 @@ export interface RoundHistoryResponse<T> {
 //   }
 
 export interface KinpuParticipant {
-    address: string;
-    deposit: bigint;
-    roomNumber: number;
-  }
+  address: string;
+  deposit: bigint;
+  roomNumber: number;
+}
+
+export interface KuroParticipant {
+  address: string;
+  deposits: {
+    amount: BigInt;
+    tokenAddress: `0x${string}`;
+    _id: string,
+  }[];
+  _id: string;
+}
   
-  export interface KinpuData {
-    roundId: number;
-    status: number;
-    startTime: number;
-    endTime: number;
-    drawnAt: number;
-    numberOfParticipants: number;
-    winner: string;
-    totalValue: string;
-    totalEntries: string;
-    participants: KinpuParticipant[];
-    isShowingWinner: boolean;
-    remainingTime?: number;
-    isHistoricalRound?: boolean;
-    currentRoundId?: string;
-    carryOverReward?: string;
-    error?: string;
-  }
+export interface KinpuData {
+  roundId: number;
+  status: number;
+  startTime: number;
+  endTime: number;
+  drawnAt: number;
+  numberOfParticipants: number;
+  winner: string;
+  totalValue: string;
+  totalEntries: string;
+  participants: KinpuParticipant[];
+  isShowingWinner: boolean;
+  remainingTime?: number;
+  isHistoricalRound?: boolean;
+  currentRoundId?: string;
+  carryOverReward?: string;
+  error?: string;
+}
   
-  export interface KinpuWinnerAnnounced {
-    drawnAt: number;
-    participants: KinpuParticipant[];
-    roundId: number;
-    safeRoom: number;
-    totalValue: string;
-    winners: KinpuWinner[];
-  }
+export interface KinpuWinnerAnnounced {
+  drawnAt: number;
+  participants: KinpuParticipant[];
+  roundId: number;
+  safeRoom: number;
+  totalValue: string;
+  winners: KinpuWinner[];
+}
   
-  export interface KinpuWinner {
-    address: string;
-    claimed: boolean;
-    claimedAt: number;
-    deposit: string;
-    txHash: string;
-    _id: string;
-  }
+export interface KinpuWinner {
+  address: string;
+  claimed: boolean;
+  claimedAt: number;
+  deposit: string;
+  txHash: string;
+  _id: string;
+}
 
 export interface KinpuRoundHistory {
-    _id: string;
-    roundId: number;
-    __v: number;
-    allWinnersClaimed: boolean;
-    createdAt: Date;
-    drawnAt: number;
-    endTime: number;
-    numberOfPlayers: number;
-    participants: KinpuParticipant[];
-    protocolFeeOwed: string;
-    safeRoom: number;
-    startTime: number;
-    status: number;
-    totalEntries: string;
-    totalValue: string;
-    updatedAt: Date;
-    winners: KinpuWinner[];
-    carryOverReward: string;
+  _id: string;
+  roundId: number;
+  __v: number;
+  allWinnersClaimed: boolean;
+  createdAt: Date;
+  drawnAt: number;
+  endTime: number;
+  numberOfPlayers: number;
+  participants: KinpuParticipant[];
+  protocolFeeOwed: string;
+  safeRoom: number;
+  startTime: number;
+  status: number;
+  totalEntries: string;
+  totalValue: string;
+  updatedAt: Date;
+  winners: KinpuWinner[];
+  carryOverReward: string;
 }
 
 export interface KuroWinnerAnnounced {
@@ -143,8 +153,16 @@ export interface KuroWinnerAnnounced {
   }
 }
 
-export interface KuroParticipant {
+export interface SupportedTokenInfo {
   address: string;
-  deposit: string;
-  _id: string;
+  isSupported: boolean;
+  decimals: number;
+  isActive: boolean;
+  minDeposit: bigint;
+  ratio: bigint;
+  symbol?: string;
+  name?: string;
+  description?: string;
+  balance?: bigint;
+  allowance?: bigint;
 }

@@ -3,6 +3,7 @@ import { useFrame } from "~/components/providers/FrameProvider";
 import { PieChart } from "@mui/x-charts/PieChart";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  KuroData,
   Participant,
   PoolStatus,
   TimeEnum,
@@ -13,6 +14,8 @@ import { toast } from "react-toastify";
 import Image from "next/image";
 import { formatEther } from "ethers";
 import { useAccount } from "wagmi";
+import { KuroParticipant } from "~/types/round";
+import { getUserEntries } from "~/app/views/kuro/TotalPlayer";
 
 export const colors = [
   "#4DFFFF", // Blue neon (từ #33CCFF)
@@ -75,10 +78,42 @@ export const colors = [
   "#66FF4D", // Toxic green (từ #11FF00)
 ];
 
+export const getTotalEntriesByTokenAddress = (
+  kuroData: KuroData | null
+): Map<string, number> => {
+  const mapToken = new Map<string, number>();
+  if (!kuroData || !kuroData.participants) return mapToken;
+
+  kuroData.participants.forEach((player) => {
+    player.deposits.forEach((deposit) => {
+      if (mapToken.has(deposit.tokenAddress)) {
+        mapToken.set(
+          deposit.tokenAddress,
+          (mapToken.get(deposit.tokenAddress) || 0) +
+            parseFloat(convertWeiToEther(deposit.amount))
+        );
+      } else {
+        mapToken.set(
+          deposit.tokenAddress,
+          parseFloat(convertWeiToEther(deposit.amount))
+        );
+      }
+    });
+  });
+
+  return mapToken;
+};
+
 export default function Demo() {
   const { isSDKLoaded, context } = useFrame();
-  const { kuroData, setPoolStatus, poolStatus, winnerData, refetchHistories } =
-    useKuro();
+  const {
+    kuroData,
+    setPoolStatus,
+    poolStatus,
+    winnerData,
+    refetchHistories,
+    getTokenSymbolByAddress,
+  } = useKuro();
   const { address } = useAccount();
   // có thể chỉnh sửa
   const [timeToShowWinner, setTimeToShowWinner] = useState<number>(
@@ -96,6 +131,7 @@ export default function Demo() {
   const [pool, setPool] = useState<Map<string, number>>(new Map());
   const [progress, setProgress] = useState<number>(1);
   const [isYouAreWinner, setIsYouAreWinner] = useState(false);
+  const [tokenMap, setTokenMap] = useState<Map<string, number>>(new Map());
 
   const mapToData = (
     map: Map<string, number>
@@ -234,9 +270,9 @@ export default function Demo() {
     const newPool = new Map<string, number>();
 
     if (kuroData.participants.length > 0) {
-      kuroData.participants.forEach((player: Participant) => {
-        if (parseFloat(player.deposit) > 0) {
-          newPool.set(player.address, parseFloat(player.deposit));
+      kuroData.participants.forEach((player: KuroParticipant) => {
+        if (getUserEntries(player.address, kuroData) > 0) {
+          newPool.set(player.address, getUserEntries(player.address, kuroData));
         }
       });
     } else if (parseFloat(kuroData.totalValue) > 0) {
@@ -244,6 +280,9 @@ export default function Demo() {
       newPool.set("Current Pool", parseFloat(kuroData.totalValue));
     }
     setPool(newPool);
+
+    const mapToken = getTotalEntriesByTokenAddress(kuroData);
+    setTokenMap(mapToken);
   }, [kuroData]);
 
   useEffect(() => {
@@ -406,7 +445,7 @@ export default function Demo() {
                       ? mapToData(pool).map((d, index) => ({
                           label: formatEthereumAddress(d.label),
                           id: d.label,
-                          value: Number(convertWeiToEther(BigInt(d.value))),
+                          value: Number(d.value),
                           color: colors[index % colors.length],
                         }))
                       : [

@@ -44,12 +44,10 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const { address, isConnected } = useAppKitAccount();
+  const { address, isConnected } = useAccount();
   const [isSyncMessage, setIsSyncMessage] = useState(false);
-  const { status } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const [user, setUser] = useState();
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [nativeBalance, setNativeBalance] = useState<string>("0");
 
   const { data: nativeBalanceData, refetch: refetchNativeBalance } = useBalance(
@@ -112,7 +110,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Hàm làm mới access token
   const refreshAccessToken = async (): Promise<boolean> => {
     try {
-      setIsRefreshing(true);
       const refreshToken = Cookies.get("refreshToken");
 
       if (!refreshToken) {
@@ -157,7 +154,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Error refreshing token:", error);
       return false;
     } finally {
-      setIsRefreshing(false);
     }
   };
 
@@ -312,8 +308,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [address]);
 
   useEffect(() => {
-    console.log("🚀 ~ AuthProvider ~ nativeBalanceData:", nativeBalanceData);
-
     if (nativeBalanceData) {
       setNativeBalance(convertWeiToEther(nativeBalanceData.value || 0));
     }

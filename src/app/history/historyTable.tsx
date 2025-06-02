@@ -12,7 +12,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { useKuro } from "~/context/KuroContext";
-import { Player, Round } from "~/types/round";
+import { KuroParticipant, Player, Round } from "~/types/round";
 import {
   convertTimestampToDateTime,
   convertWeiToEther,
@@ -23,10 +23,23 @@ import { Button } from "~/components/ui/Button";
 import Link from "next/link";
 import { useAccount } from "wagmi";
 
+export const getTotalUserEntries = (round: Round, address: string): number => {
+  if (!round.participants || !address) return 0;
+
+  const user = round.participants.find(
+    (player) => player.address.toLowerCase() === address.toLowerCase()
+  );
+  if (!user) return 0;
+
+  return user.deposits.reduce((sum, deposit) => {
+    return sum + Number(deposit.amount);
+  }, 0);
+};
+
 export const findPlayerByAddress = (
   round: Round,
   address: string
-): Player | undefined => {
+): KuroParticipant | undefined => {
   return round.participants.find(
     (player) => player.address.toLowerCase() === address.toLowerCase()
   );
@@ -34,11 +47,13 @@ export const findPlayerByAddress = (
 
 export const calculateWinLeverage = (
   round: Round,
-  player: Player | undefined
+  player: KuroParticipant | undefined
 ) => {
   if (!player) return 0;
   const totalDeposit = Number(convertWeiToEther(round.totalValue));
-  const playerDeposit = Number(convertWeiToEther(player.deposit));
+  const playerDeposit = Number(
+    convertWeiToEther(getTotalUserEntries(round, player.address).toString())
+  );
 
   if (totalDeposit === 0 || playerDeposit === 0) {
     return 0;
@@ -46,7 +61,6 @@ export const calculateWinLeverage = (
 
   return (totalDeposit / playerDeposit).toFixed(2);
 };
-
 const HistoryTable = ({ type = "all" }: { type: "youWin" | "all" }) => {
   const {
     handleClaimPrizes,
@@ -75,7 +89,6 @@ const HistoryTable = ({ type = "all" }: { type: "youWin" | "all" }) => {
 
   useEffect(() => {
     refetchHistories(page, limit, type);
-    console.log(address);
   }, [page, address, type]);
 
   return (
@@ -169,7 +182,7 @@ const HistoryTable = ({ type = "all" }: { type: "youWin" | "all" }) => {
                         height={16}
                       />
                       {convertWeiToEther(
-                        findPlayerByAddress(round, round.winner)?.deposit
+                        getTotalUserEntries(round, round.winner).toString()
                       )}
                     </div>
                   </TableCell>
@@ -192,7 +205,7 @@ const HistoryTable = ({ type = "all" }: { type: "youWin" | "all" }) => {
                       />
                       {address && findPlayerByAddress(round, address)
                         ? convertWeiToEther(
-                            findPlayerByAddress(round, address)?.deposit
+                            getTotalUserEntries(round, address).toString()
                           )
                         : "-"}
                     </div>
@@ -210,7 +223,12 @@ const HistoryTable = ({ type = "all" }: { type: "youWin" | "all" }) => {
                       <TableCell className="py-4">
                         <div className="flex items-center gap-2">
                           <Button
-                            onClick={() => handleWithdraw(round.roundId)}
+                            onClick={() =>
+                              handleWithdraw(
+                                round.roundId,
+                                round.kuroContractAddress
+                              )
+                            }
                             className="h-6 !py-0 px-2"
                           >
                             Withdraw
@@ -221,12 +239,13 @@ const HistoryTable = ({ type = "all" }: { type: "youWin" | "all" }) => {
                       <TableCell className="py-4">
                         <div className="flex items-center justify-between gap-2">
                           <Button
-                            onClick={() =>
+                            onClick={async () =>
                               handleClaimPrizes(
                                 round.roundId,
                                 round.participants.map((idx) =>
-                                  Number(idx.deposit)
-                                )
+                                  getTotalUserEntries(round, idx.address)
+                                ),
+                                round.kuroContractAddress
                               )
                             }
                             className="h-6 !py-0 px-2"

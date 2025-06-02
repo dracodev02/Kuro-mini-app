@@ -2,19 +2,25 @@
 import Image from "next/image";
 import { useAccount } from "wagmi";
 import { formatEther } from "viem";
-import { useKuro } from "~/context/KuroContext";
+import { KuroData, useKuro } from "~/context/KuroContext";
+
+export const getUserEntries = (address: string, kuroData: KuroData | null) => {
+  if (!kuroData || !kuroData.participants || !address) return 0;
+  const user = kuroData.participants.find(
+    (p) => p.address.toLowerCase() === address.toLowerCase()
+  );
+
+  if (!user) return 0;
+  const deposit = user.deposits.reduce((sum, deposit) => {
+    return sum + Number(deposit.amount);
+  }, 0);
+
+  return Number(formatEther(BigInt(deposit)));
+};
 
 const TotalPlayer = () => {
   const { kuroData } = useKuro();
   const { address } = useAccount();
-
-  // Tính số entries của người dùng hiện tại
-  const getUserEntries = (address: string) => {
-    if (!kuroData || !kuroData.participants) return 0;
-    const deposit =
-      kuroData.participants.find((p) => p.address === address)?.deposit || "0";
-    return Number(formatEther(BigInt(deposit)));
-  };
 
   // Tính tỷ lệ thắng dựa trên entries
   const calculateWinChance = (address: string) => {
@@ -22,13 +28,14 @@ const TotalPlayer = () => {
       return "0%";
     }
 
-    const userEntries = getUserEntries(address);
+    const userEntries = getUserEntries(address, kuroData);
     const totalEntries = Number(
       formatEther(BigInt(kuroData.totalValue || "0"))
     );
     const winChance = (userEntries / totalEntries) * 100;
     return `${winChance.toFixed(2)}%`;
   };
+
   return (
     <div className="flex items-center justify-around border-b border-primary/50 pb-6">
       <div className="flex flex-1 flex-col gap-1">
@@ -50,7 +57,7 @@ const TotalPlayer = () => {
             height={24}
           />
           <p className="text-center text-xl font-semibold">
-            {getUserEntries(address as string)}
+            {getUserEntries(address as string, kuroData)}
             {/* <span className="text-sm opacity-50">/{getTotalEntries()}</span> */}
           </p>
         </div>

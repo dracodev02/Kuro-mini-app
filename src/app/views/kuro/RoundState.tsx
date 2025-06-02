@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { KuroStatus, PoolStatus, useKuro } from "~/context/KuroContext";
+import { PoolStatus, useKuro } from "~/context/KuroContext";
 
 const RoundState = () => {
   const { kuroData, poolStatus, setPoolStatus, winnerData } = useKuro();

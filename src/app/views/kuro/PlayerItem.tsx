@@ -1,4 +1,5 @@
 import { formatEther } from "ethers";
+import Image from "next/image";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 
 interface PlayerItemProps {
@@ -37,13 +38,18 @@ const PlayerItem: React.FC<PlayerItemProps> = ({
         </p>
       </div>
       <div className="flex flex-col gap-2">
-        <p className="text-end text-sm font-semibold">{winrate}%</p>
-        <p className="text-end text-xs">
-          <span className="font-bold text-yellow-500">
-            {formatEther(totalDeposits)}
-          </span>{" "}
-          MON
-        </p>
+        <p className="text-end text-xs font-semibold">{winrate}%</p>
+        <div className="flex items-center justify-end gap-1">
+          <p className="text-end text-sm">
+            <span className="font-bold text-yellow-500">{totalDeposits}</span>{" "}
+          </p>
+          <Image
+            src={"/images/monad_logo.svg"}
+            alt="logo"
+            width={16}
+            height={16}
+          />
+        </div>
       </div>
     </div>
   );

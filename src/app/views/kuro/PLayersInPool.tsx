@@ -1,24 +1,30 @@
 import { useEffect, useState, useRef } from "react";
-import { colors } from "~/components/Demo";
+import { colors, getTotalEntriesByTokenAddress } from "~/components/Demo";
 import { Participant, useKuro } from "~/context/KuroContext";
 import PlayerItem from "./PlayerItem";
 import { IconX } from "@tabler/icons-react";
+import { KuroParticipant } from "~/types/round";
+import { getUserEntries } from "./TotalPlayer";
+import { convertWeiToEther } from "~/utils/string";
+import { useAuth } from "~/context/AuthContext";
 
-interface ColoredParticipant extends Participant {
+interface ColoredParticipant extends KuroParticipant {
   color: string;
 }
-
 interface OverlayProps {
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const Overlay: React.FC<OverlayProps> = ({ isOpen, setIsOpen }) => {
-  const { kuroData } = useKuro();
+  const { kuroData, getTokenSymbolByAddress } = useKuro();
+  const { nativeBalance } = useAuth();
   const [kuroDataWithColor, setKuroDataWithColor] = useState<
     ColoredParticipant[] | null
   >(null);
   const [sortedPlayers, setSortedPlayers] = useState<ColoredParticipant[]>([]);
+  const [tokenMap, setTokenMap] = useState<Map<string, number>>(new Map());
+
   useEffect(() => {
     if (!kuroData) return;
 
@@ -28,17 +34,25 @@ const Overlay: React.FC<OverlayProps> = ({ isOpen, setIsOpen }) => {
     }));
 
     setKuroDataWithColor(newData);
+    const mapToken = getTotalEntriesByTokenAddress(kuroData);
+    setTokenMap(mapToken);
   }, [kuroData]);
 
   useEffect(() => {
     if (!kuroDataWithColor) return;
 
     const sortedPlayers = [...kuroDataWithColor].sort(
-      (a, b) => parseFloat(b.deposit) - parseFloat(a.deposit)
+      (a, b) =>
+        getUserEntries(b.address, kuroData) -
+        getUserEntries(a.address, kuroData)
     );
 
     setSortedPlayers(sortedPlayers);
   }, [kuroDataWithColor]);
+
+  useEffect(() => {
+    console.log(nativeBalance);
+  }, [nativeBalance]);
 
   if (!kuroData) return null;
 
@@ -62,6 +76,18 @@ const Overlay: React.FC<OverlayProps> = ({ isOpen, setIsOpen }) => {
           {sortedPlayers.length === 0 && (
             <div className="text-center text-gray-500">No player in pool</div>
           )}
+
+          <div className="grid gap-2 grid-cols-3 text-xs place-items-center">
+            {tokenMap.size > 0 &&
+              [...tokenMap.entries()].map(([tokenAddress, totalDeposits]) => (
+                <div className="p-0.5 rounded w-full">
+                  <p>
+                    ${getTokenSymbolByAddress(tokenAddress)} {totalDeposits}
+                  </p>
+                </div>
+              ))}
+          </div>
+
           <div className="sticky top-0 flex items-center justify-between font-semibold">
             <p className="text-foreground opacity-50">
               {sortedPlayers.length} Players
@@ -74,10 +100,14 @@ const Overlay: React.FC<OverlayProps> = ({ isOpen, setIsOpen }) => {
               avatar="/images/monad.svg"
               address={player.address}
               winrate={(
-                (Number(player.deposit) / Number(kuroData.totalValue)) *
+                (getUserEntries(player.address, kuroData) /
+                  parseFloat(convertWeiToEther(kuroData.totalValue))) *
                 100
               ).toFixed(2)}
-              totalDeposits={player.deposit}
+              totalDeposits={getUserEntries(
+                player.address,
+                kuroData
+              ).toString()}
               color={player.color}
             />
           ))}
