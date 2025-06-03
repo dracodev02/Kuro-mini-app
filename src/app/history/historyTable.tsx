@@ -54,7 +54,7 @@ export const calculateWinLeverage = (
   if (!player) return 0;
   const totalDeposit = Number(convertWeiToEther(round.totalValue));
   const playerDeposit = Number(
-    convertWeiToEther(getTotalUserEntries(round, player.address).toString())
+    convertWeiToEther(getTotalUserEntries(round, player.address))
   );
 
   if (totalDeposit === 0 || playerDeposit === 0) {
@@ -184,7 +184,7 @@ const HistoryTable = ({ type = "all" }: { type: "youWin" | "all" }) => {
                         height={16}
                       />
                       {convertWeiToEther(
-                        getTotalUserEntries(round, round.winner).toString()
+                        getTotalUserEntries(round, round.winner)
                       )}
                     </div>
                   </TableCell>
@@ -206,9 +206,7 @@ const HistoryTable = ({ type = "all" }: { type: "youWin" | "all" }) => {
                         height={16}
                       />
                       {address && findPlayerByAddress(round, address)
-                        ? convertWeiToEther(
-                            getTotalUserEntries(round, address).toString()
-                          )
+                        ? convertWeiToEther(getTotalUserEntries(round, address))
                         : "-"}
                     </div>
                   </TableCell>
