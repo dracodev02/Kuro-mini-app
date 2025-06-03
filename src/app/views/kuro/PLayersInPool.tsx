@@ -17,8 +17,8 @@ interface OverlayProps {
 }
 
 const Overlay: React.FC<OverlayProps> = ({ isOpen, setIsOpen }) => {
-  const { kuroData, getTokenSymbolByAddress } = useKuro();
-  const { nativeBalance } = useAuth();
+  const { kuroData } = useKuro();
+  const { nativeBalance, getTokenSymbolByAddress } = useAuth();
   const [kuroDataWithColor, setKuroDataWithColor] = useState<
     ColoredParticipant[] | null
   >(null);
@@ -50,10 +50,6 @@ const Overlay: React.FC<OverlayProps> = ({ isOpen, setIsOpen }) => {
     setSortedPlayers(sortedPlayers);
   }, [kuroDataWithColor]);
 
-  useEffect(() => {
-    console.log(nativeBalance);
-  }, [nativeBalance]);
-
   if (!kuroData) return null;
 
   return (
@@ -82,7 +78,8 @@ const Overlay: React.FC<OverlayProps> = ({ isOpen, setIsOpen }) => {
               [...tokenMap.entries()].map(([tokenAddress, totalDeposits]) => (
                 <div className="p-0.5 rounded w-full">
                   <p>
-                    ${getTokenSymbolByAddress(tokenAddress)} {totalDeposits}
+                    ${getTokenSymbolByAddress(tokenAddress)}{" "}
+                    {Number(totalDeposits.toFixed(4))}
                   </p>
                 </div>
               ))}

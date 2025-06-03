@@ -23,17 +23,19 @@ import { Button } from "~/components/ui/Button";
 import Link from "next/link";
 import { useAccount } from "wagmi";
 
-export const getTotalUserEntries = (round: Round, address: string): number => {
-  if (!round.participants || !address) return 0;
+export const getTotalUserEntries = (round: Round, address: string): bigint => {
+  if (!round.participants || !address) return BigInt(0);
 
   const user = round.participants.find(
     (player) => player.address.toLowerCase() === address.toLowerCase()
   );
-  if (!user) return 0;
+  if (!user) return BigInt(0);
 
-  return user.deposits.reduce((sum, deposit) => {
-    return sum + Number(deposit.amount);
-  }, 0);
+  return BigInt(
+    user.deposits.reduce((sum, deposit) => {
+      return sum + Number(deposit.amount);
+    }, 0)
+  );
 };
 
 export const findPlayerByAddress = (

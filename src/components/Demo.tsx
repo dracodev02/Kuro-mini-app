@@ -2,13 +2,7 @@
 import { useFrame } from "~/components/providers/FrameProvider";
 import { PieChart } from "@mui/x-charts/PieChart";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  KuroData,
-  Participant,
-  PoolStatus,
-  TimeEnum,
-  useKuro,
-} from "~/context/KuroContext";
+import { KuroData, PoolStatus, TimeEnum, useKuro } from "~/context/KuroContext";
 import { convertWeiToEther, formatEthereumAddress } from "~/utils/string";
 import { toast } from "react-toastify";
 import Image from "next/image";
@@ -106,14 +100,8 @@ export const getTotalEntriesByTokenAddress = (
 
 export default function Demo() {
   const { isSDKLoaded, context } = useFrame();
-  const {
-    kuroData,
-    setPoolStatus,
-    poolStatus,
-    winnerData,
-    refetchHistories,
-    getTokenSymbolByAddress,
-  } = useKuro();
+  const { kuroData, setPoolStatus, poolStatus, winnerData, refetchHistories } =
+    useKuro();
   const { address } = useAccount();
   // có thể chỉnh sửa
   const [timeToShowWinner, setTimeToShowWinner] = useState<number>(

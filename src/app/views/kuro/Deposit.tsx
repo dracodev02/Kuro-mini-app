@@ -5,13 +5,7 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { monadTestnet } from "viem/chains";
-import {
-  useAccount,
-  useBalance,
-  useConnect,
-  useDisconnect,
-  useWriteContract,
-} from "wagmi";
+import { useAccount, useConnect, useDisconnect, useWriteContract } from "wagmi";
 import { ERC20ABI } from "~/abi/ERC20ABI";
 import { YoloABIMultiToken } from "~/abi/YoloABI";
 import { Button } from "~/components/ui/Button";
@@ -29,23 +23,14 @@ import { SupportedTokenInfo } from "~/types/round";
 import { convertWeiToEther } from "~/utils/string";
 
 const Deposit = () => {
-  const { address: connectedAddress } = useAccount();
-  const balance = useBalance({
-    address: connectedAddress,
-    blockTag: "latest",
-    chainId: monadTestnet.id,
-  });
   const [depositAmount, setDepositAmount] = useState<string>("0.1");
-  const [minDepositAmount] = useState<number>(0.01);
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   const { isConnected } = useAccount();
-  const {
-    poolStatus,
-    updateSupportedTokens,
-    supportedTokens,
-    getTokenSymbolByAddress,
-  } = useKuro();
+  const { poolStatus } = useKuro();
+
+  const { updateSupportedTokens, supportedTokens, getTokenSymbolByAddress } =
+    useAuth();
   const [selectedToken, setSelectedToken] = useState<SupportedTokenInfo | null>(
     null
   );
@@ -55,7 +40,7 @@ const Deposit = () => {
     useWriteContract();
   const [unlimitedApproval, setUnlimitedApproval] = useState(false);
   const [isLoadingApproval, setIsLoadingApproval] = useState(false);
-  const { updateNativeBalance } = useAuth();
+  const { updateNativeBalance, nativeBalance } = useAuth();
   const connectWallet = async () => {
     try {
       if (isConnected) {
@@ -211,7 +196,8 @@ const Deposit = () => {
           success: "Deposit Success. 👌",
           error: "Deposit failed. 🤯",
         })
-        .then((txHash) => {
+        .then(async () => {
+          await updateNativeBalance();
           updateSupportedTokens();
         });
     } catch (error) {
@@ -253,9 +239,14 @@ const Deposit = () => {
                 <span className="text-xs">
                   Balance:{" "}
                   {selectedToken
-                    ? convertWeiToEther(selectedToken.balance) +
-                      " " +
-                      getTokenSymbolByAddress(selectedToken?.address)
+                    ? selectedToken.address ==
+                      "0x0000000000000000000000000000000000000000"
+                      ? convertWeiToEther(
+                          BigInt(parseFloat(nativeBalance) * 1e18)
+                        )
+                      : convertWeiToEther(selectedToken.balance) +
+                        " " +
+                        getTokenSymbolByAddress(selectedToken?.address)
                     : 0}
                 </span>
               </div>

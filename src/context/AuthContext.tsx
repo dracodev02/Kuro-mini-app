@@ -9,20 +9,24 @@ import {
 } from "react";
 import { toast } from "react-toastify";
 import {
-  useAccount,
   useSignMessage,
-  useConnectorClient,
   useBalance,
+  useReadContract,
+  usePublicClient,
+  useAccount,
 } from "wagmi";
 import Cookies from "js-cookie";
-import { useAppKitAccount } from "@reown/appkit/react";
+import { getCookie, setCookie, deleteCookie } from "~/utils/cookie";
+import axiosInstance from "~/lib/axios";
 import { monadTestnet } from "wagmi/chains";
 import { convertWeiToEther } from "~/utils/string";
-import { deleteCookie, getCookie, setCookie } from "~/utils/cookie";
+import { YoloABIMultiToken } from "~/abi/YoloABI";
+import { SupportedTokenInfo } from "~/types/round";
+import { ERC20ABI } from "~/abi/ERC20ABI";
+import { supportedTokensConfig } from "~/app/config/supported-tokens";
 import useRequestSignature from "~/app/api/useGetSignature";
 import usePostVerify from "~/app/api/usePostVerify";
 import useGetUserInfo from "~/app/api/useGetUserInfo";
-import axiosInstance from "~/lib/axios";
 
 type AuthContextType = {
   signMessageWithSign: () => void;
@@ -39,6 +43,9 @@ type AuthContextType = {
   logout: () => void;
   nativeBalance: string;
   updateNativeBalance: () => Promise<void>;
+  supportedTokens: SupportedTokenInfo[];
+  getTokenSymbolByAddress: (tokenAddress: string) => string;
+  updateSupportedTokens: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -49,6 +56,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const { signMessageAsync } = useSignMessage();
   const [user, setUser] = useState();
   const [nativeBalance, setNativeBalance] = useState<string>("0");
+  const [supportedTokens, setSupportedTokens] = useState<SupportedTokenInfo[]>(
+    []
+  );
+  const publicClient = usePublicClient();
 
   const { data: nativeBalanceData, refetch: refetchNativeBalance } = useBalance(
     {
@@ -69,15 +80,176 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const updateNativeBalance = useCallback(async () => {
     if (!address) {
       setNativeBalance("0");
-
       return;
     }
     setTimeout(async () => {
       const newBalance = await refetchNativeBalance();
-      console.log("🚀 ~ updateNativeBalance ~ newBalance:", newBalance);
       setNativeBalance(convertWeiToEther(newBalance.data?.value || 0));
     }, 4000);
   }, [address]);
+
+  const { data: supportedTokenAddresses, refetch: refetchSupportedTokens } =
+    useReadContract({
+      abi: YoloABIMultiToken,
+      address: process.env
+        .NEXT_PUBLIC_KURO_MULTI_TOKEN_ADDRESS as `0x${string}`,
+      functionName: "getSupportedTokens",
+    });
+
+  const getTokenSymbolByAddress = (tokenAddress: string): string => {
+    if (tokenAddress === "0x0000000000000000000000000000000000000000")
+      return "MON";
+
+    const token = supportedTokensConfig.supportedTokens.find(
+      (token) => token.address.toLowerCase() === tokenAddress.toLowerCase()
+    );
+    return token?.symbol || "Unknown Token";
+  };
+
+  const updateSupportedTokens = async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 2000);
+    });
+
+    await fetchTokenDetails();
+  };
+
+  const fetchTokenDetails = useCallback(async () => {
+    if (!supportedTokenAddresses || !publicClient || !address) return;
+
+    const tokenDetails: SupportedTokenInfo[] = [];
+    const addresses = Array.isArray(supportedTokenAddresses)
+      ? supportedTokenAddresses
+      : [];
+
+    for (const tokenAddress of addresses) {
+      try {
+        // Get token info from contract
+        const tokenInfo = (await publicClient.readContract({
+          abi: YoloABIMultiToken,
+          address: process.env
+            .NEXT_PUBLIC_KURO_MULTI_TOKEN_ADDRESS as `0x${string}`,
+          functionName: "supportedTokens",
+          args: [tokenAddress],
+        })) as [boolean, number, boolean, bigint, bigint];
+
+        let symbol = "MON";
+        let name = "Monad";
+        let description = "Native Monad token";
+        let balance = BigInt(0);
+        let allowance = BigInt(0);
+
+        if (tokenAddress === "0x0000000000000000000000000000000000000000") {
+          // Native MON
+          // balance = BigInt(parseFloat(nativeBalance) * 1e18);
+          const newBalance = await refetchNativeBalance();
+          balance = newBalance.data?.value || BigInt(0);
+          allowance = BigInt(0);
+        } else {
+          // ERC20 token - First try to get info from config file
+          const configToken = supportedTokensConfig.supportedTokens.find(
+            (token) =>
+              token.address.toLowerCase() === tokenAddress.toLowerCase()
+          );
+
+          if (configToken) {
+            // Use config file data
+            symbol = configToken.symbol;
+            name = configToken.name;
+            description = configToken.description;
+          }
+
+          try {
+            // Get balance and allowance for ERC20 tokens
+            const [tokenBalance, tokenAllowance] = await Promise.all([
+              publicClient.readContract({
+                abi: ERC20ABI,
+                address: tokenAddress as `0x${string}`,
+                functionName: "balanceOf",
+                args: [address],
+              }) as Promise<bigint>,
+              publicClient.readContract({
+                abi: ERC20ABI,
+                address: tokenAddress as `0x${string}`,
+                functionName: "allowance",
+                args: [
+                  address,
+                  process.env
+                    .NEXT_PUBLIC_KURO_MULTI_TOKEN_ADDRESS as `0x${string}`,
+                ],
+              }) as Promise<bigint>,
+            ]);
+
+            balance = tokenBalance;
+            allowance = tokenAllowance;
+
+            // If no config data found, try to fetch from contract
+            if (!configToken) {
+              try {
+                const [tokenSymbol, tokenName] = await Promise.all([
+                  publicClient.readContract({
+                    abi: ERC20ABI,
+                    address: tokenAddress as `0x${string}`,
+                    functionName: "symbol",
+                  }) as Promise<string>,
+                  publicClient.readContract({
+                    abi: ERC20ABI,
+                    address: tokenAddress as `0x${string}`,
+                    functionName: "name",
+                  }) as Promise<string>,
+                ]);
+
+                symbol = tokenSymbol;
+                name = tokenName;
+                description = `ERC20 Token: ${tokenName}`;
+              } catch (error) {
+                console.error(
+                  `Error fetching token details from contract for ${tokenAddress}:`,
+                  error
+                );
+                symbol = `Token ${tokenAddress.slice(0, 6)}...`;
+                name = `Unknown Token`;
+                description = "Unknown token";
+              }
+            }
+          } catch (error) {
+            console.error(
+              `Error fetching token balance/allowance for ${tokenAddress}:`,
+              error
+            );
+            symbol =
+              configToken?.symbol || `Token ${tokenAddress.slice(0, 6)}...`;
+            name = configToken?.name || `Unknown Token`;
+            description = configToken?.description || "Unknown token";
+          }
+        }
+
+        tokenDetails.push({
+          address: tokenAddress as string,
+          isSupported: tokenInfo[0],
+          decimals: tokenInfo[1],
+          isActive: tokenInfo[2],
+          minDeposit: tokenInfo[3],
+          ratio: tokenInfo[4],
+          symbol,
+          name,
+          description,
+          balance,
+          allowance,
+        });
+      } catch (error) {
+        console.error(`Error fetching token info for ${tokenAddress}:`, error);
+      }
+    }
+
+    setSupportedTokens(
+      tokenDetails.filter((token) => token.isSupported && token.isActive)
+    );
+  }, [address, supportedTokenAddresses, publicClient, nativeBalance]);
+
+  useEffect(() => {
+    fetchTokenDetails();
+  }, [supportedTokenAddresses, publicClient, address, nativeBalance]);
 
   const prevAddressRef = useRef<string | null>(null);
 
@@ -334,6 +506,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     logout,
     nativeBalance,
     updateNativeBalance,
+    supportedTokens,
+    getTokenSymbolByAddress,
+    updateSupportedTokens,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

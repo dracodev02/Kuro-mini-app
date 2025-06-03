@@ -10,26 +10,19 @@ import React, {
 import { io, Socket as SocketIOClient } from "socket.io-client";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+
+import { useAccount, useWriteContract } from "wagmi";
+
+import { useAuth } from "./AuthContext";
 import {
   KuroParticipant,
   KuroWinnerAnnounced,
   Round,
   RoundHistoryResponse,
-  SupportedTokenInfo,
 } from "~/types/round";
-import {
-  useAccount,
-  usePublicClient,
-  useReadContract,
-  useWriteContract,
-} from "wagmi";
-import { useAuth } from "./AuthContext";
-import { useAppKitAccount } from "@reown/appkit/react";
-import { YoloABI, YoloABIMultiToken } from "~/abi/YoloABI";
-import { supportedTokensConfig } from "~/app/config/supported-tokens";
-import { ERC20ABI } from "~/abi/ERC20ABI";
 import useClaimKuroRound from "~/app/api/useClaimKuroRound";
 import { useGetKuroHistory } from "~/app/api/useGetKuroHistory";
+import { YoloABI, YoloABIMultiToken } from "~/abi/YoloABI";
 
 export enum TimeEnum {
   _5SECS = 5 * 1000,
@@ -108,7 +101,7 @@ interface KuroContextProps {
   reconnectSocket: () => void;
   handleClaimPrizes: (
     roundId: number,
-    userDepositIndices: number[],
+    userDepositIndices: bigint[],
     kuroContractAddress?: string
   ) => Promise<void>;
   handleWithdraw: (
@@ -126,9 +119,6 @@ interface KuroContextProps {
     type?: "all" | "youWin"
   ) => Promise<void>;
   isFetchingKuroHistory: boolean;
-  supportedTokens: SupportedTokenInfo[];
-  getTokenSymbolByAddress: (tokenAddress: string) => string;
-  updateSupportedTokens: () => Promise<void>;
 }
 
 interface KuroProviderProps {
@@ -166,6 +156,7 @@ const formatEther = (value: string): string => {
 
 export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
   const { address } = useAccount();
+
   const { isSyncMessage, signMessageWithSign, nativeBalance } = useAuth();
   const [socket, setSocket] = useState<SocketIOClient | null>(null);
   const [isConnected, setIsConnected] = useState<boolean>(false);
@@ -181,170 +172,7 @@ export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
   );
   const [myWinHistories, setMyWinHistories] =
     useState<RoundHistoryResponse<Round> | null>(null);
-  const { updateNativeBalance } = useAuth();
-  const [supportedTokens, setSupportedTokens] = useState<SupportedTokenInfo[]>(
-    []
-  );
-  const publicClient = usePublicClient();
-
-  const { data: supportedTokenAddresses, refetch: refetchSupportedTokens } =
-    useReadContract({
-      abi: YoloABIMultiToken,
-      address: process.env
-        .NEXT_PUBLIC_KURO_MULTI_TOKEN_ADDRESS as `0x${string}`,
-      functionName: "getSupportedTokens",
-    });
-
-  const getTokenSymbolByAddress = (tokenAddress: string): string => {
-    const token = supportedTokens.find(
-      (token) => token.address.toLowerCase() === tokenAddress.toLowerCase()
-    );
-    return token?.symbol || "Unknown Token";
-  };
-
-  const updateSupportedTokens = async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 2000);
-    });
-
-    await fetchTokenDetails();
-  };
-
-  const fetchTokenDetails = useCallback(async () => {
-    console.log(supportedTokenAddresses, publicClient, address);
-    if (!supportedTokenAddresses || !publicClient || !address) return;
-
-    const tokenDetails: SupportedTokenInfo[] = [];
-    const addresses = Array.isArray(supportedTokenAddresses)
-      ? supportedTokenAddresses
-      : [];
-
-    for (const tokenAddress of addresses) {
-      try {
-        // Get token info from contract
-        const tokenInfo = (await publicClient.readContract({
-          abi: YoloABIMultiToken,
-          address: process.env
-            .NEXT_PUBLIC_KURO_MULTI_TOKEN_ADDRESS as `0x${string}`,
-          functionName: "supportedTokens",
-          args: [tokenAddress],
-        })) as [boolean, number, boolean, bigint, bigint];
-
-        let symbol = "MON";
-        let name = "Monad";
-        let description = "Native Monad token";
-        let balance = BigInt(0);
-        let allowance = BigInt(0);
-
-        if (tokenAddress === "0x0000000000000000000000000000000000000000") {
-          // Native MON
-          balance = BigInt(parseFloat(nativeBalance) * 1e18) || BigInt(0);
-          allowance = BigInt(0); // No allowance needed for native token
-        } else {
-          // ERC20 token - First try to get info from config file
-          const configToken = supportedTokensConfig.supportedTokens.find(
-            (token) =>
-              token.address.toLowerCase() === tokenAddress.toLowerCase()
-          );
-
-          if (configToken) {
-            // Use config file data
-            symbol = configToken.symbol;
-            name = configToken.name;
-            description = configToken.description;
-          }
-
-          try {
-            // Get balance and allowance for ERC20 tokens
-            const [tokenBalance, tokenAllowance] = await Promise.all([
-              publicClient.readContract({
-                abi: ERC20ABI,
-                address: tokenAddress as `0x${string}`,
-                functionName: "balanceOf",
-                args: [address],
-              }) as Promise<bigint>,
-              publicClient.readContract({
-                abi: ERC20ABI,
-                address: tokenAddress as `0x${string}`,
-                functionName: "allowance",
-                args: [
-                  address,
-                  process.env
-                    .NEXT_PUBLIC_KURO_MULTI_TOKEN_ADDRESS as `0x${string}`,
-                ],
-              }) as Promise<bigint>,
-            ]);
-
-            balance = tokenBalance;
-            allowance = tokenAllowance;
-
-            // If no config data found, try to fetch from contract
-            if (!configToken) {
-              try {
-                const [tokenSymbol, tokenName] = await Promise.all([
-                  publicClient.readContract({
-                    abi: ERC20ABI,
-                    address: tokenAddress as `0x${string}`,
-                    functionName: "symbol",
-                  }) as Promise<string>,
-                  publicClient.readContract({
-                    abi: ERC20ABI,
-                    address: tokenAddress as `0x${string}`,
-                    functionName: "name",
-                  }) as Promise<string>,
-                ]);
-
-                symbol = tokenSymbol;
-                name = tokenName;
-                description = `ERC20 Token: ${tokenName}`;
-              } catch (error) {
-                console.error(
-                  `Error fetching token details from contract for ${tokenAddress}:`,
-                  error
-                );
-                symbol = `Token ${tokenAddress.slice(0, 6)}...`;
-                name = `Unknown Token`;
-                description = "Unknown token";
-              }
-            }
-          } catch (error) {
-            console.error(
-              `Error fetching token balance/allowance for ${tokenAddress}:`,
-              error
-            );
-            symbol =
-              configToken?.symbol || `Token ${tokenAddress.slice(0, 6)}...`;
-            name = configToken?.name || `Unknown Token`;
-            description = configToken?.description || "Unknown token";
-          }
-        }
-
-        tokenDetails.push({
-          address: tokenAddress as string,
-          isSupported: tokenInfo[0],
-          decimals: tokenInfo[1],
-          isActive: tokenInfo[2],
-          minDeposit: tokenInfo[3],
-          ratio: tokenInfo[4],
-          symbol,
-          name,
-          description,
-          balance,
-          allowance,
-        });
-      } catch (error) {
-        console.error(`Error fetching token info for ${tokenAddress}:`, error);
-      }
-    }
-
-    setSupportedTokens(
-      tokenDetails.filter((token) => token.isSupported && token.isActive)
-    );
-  }, [address, supportedTokenAddresses, publicClient, nativeBalance]);
-
-  useEffect(() => {
-    fetchTokenDetails();
-  }, [supportedTokenAddresses, publicClient, address, nativeBalance]);
+  const { updateSupportedTokens } = useAuth();
 
   // Thêm state để theo dõi các vòng đã thông báo người thắng
   const [announcedRounds, setAnnouncedRounds] = useState<Set<number>>(
@@ -368,7 +196,7 @@ export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
 
   const handleClaimPrizes = async (
     roundId: number,
-    userDepositIndices: number[],
+    userDepositIndices: bigint[],
     kuroContractAddress?: string
   ) => {
     if (userDepositIndices.length == 0) {
@@ -432,7 +260,6 @@ export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
           error: "Claim failed. 🤯",
         })
         .then((txHash) => {
-          updateNativeBalance();
           updateSupportedTokens();
 
           _claimKuroRound
@@ -506,9 +333,7 @@ export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
           error: "Withdraw failed. 🤯",
         })
         .then((txHash) => {
-          updateNativeBalance();
           updateSupportedTokens();
-          console.log("🚀 ~ withdrawKuroRound: ~ txHash:", txHash);
           _claimKuroRound
             .mutateAsync({
               roundId: roundId,
@@ -988,10 +813,7 @@ export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
     refetchHistories,
     poolStatus,
     setPoolStatus,
-    supportedTokens,
     isFetchingKuroHistory,
-    getTokenSymbolByAddress,
-    updateSupportedTokens,
   };
 
   return <KuroContext.Provider value={value}>{children}</KuroContext.Provider>;
