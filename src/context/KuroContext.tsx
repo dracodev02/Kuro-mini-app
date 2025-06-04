@@ -633,13 +633,11 @@ export const KuroProvider: React.FC<KuroProviderProps> = ({ children }) => {
     console.log("Connected to socket server");
     setIsConnected(true);
     setReconnectAttempts(0);
-    toast.success("Connected to websocket server");
   }, []);
 
   const handleDisconnect = useCallback(() => {
     console.log("Disconnected from socket server");
     setIsConnected(false);
-    toast.info("Disconnected from websocket server");
   }, []);
 
   const handleConnectError = useCallback(
